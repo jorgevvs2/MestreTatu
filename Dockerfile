@@ -8,9 +8,10 @@ RUN apt-get update && \
 WORKDIR /app
 
 COPY requirements.txt .
-
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy all necessary code files
+COPY src/main.py .
+COPY cogs/ ./cogs/
 
-CMD ["python", "src/main.py"]
+CMD ["python", "main.py"]
