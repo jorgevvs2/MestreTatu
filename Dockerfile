@@ -12,6 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy all necessary code files
 COPY src/main.py .
-COPY cogs/ ./cogs/
+COPY src/cogs/ ./cogs/
 
 CMD ["python", "main.py"]
