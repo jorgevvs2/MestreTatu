@@ -1,0 +1,32 @@
+# Environments
+.venv
+venv
+env
+
+# Secrets and sensitive files
+.env
+*.env
+cookies.txt
+src/cookies.txt
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE and editor files
+.vscode/
+.idea/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+discord.log
+
+# Cache files (e.g., from spotipy)
+.cache
+src/.cache

@@ -1,0 +1,36 @@
+# Docker and Git files
+Dockerfile
+.dockerignore
+.git
+.gitignore
+
+# Secrets and sensitive files
+.env
+*.env
+cookies.txt
+src/cookies.txt
+
+# Environments and dependencies
+.venv
+venv
+env
+node_modules
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE and editor files
+.vscode/
+.idea/
+
+# Log files
+*.log
+discord.log
+
+# Cache files
+.cache
+src/.cache
+
+# Documentation
+*.md
