@@ -1,6 +1,6 @@
-PinoBeats 🎶
+# TatuBeats 🎶
 
-Um bot de música para Discord robusto e fácil de usar, construído com `discord.py` e containerizado com Docker. PinoBeats pode tocar suas músicas e playlists favoritas do YouTube e Spotify diretamente no seu canal de voz.
+Um bot de música para Discord robusto e fácil de usar, construído com `discord.py` e containerizado com Docker. TatuBeats pode tocar suas músicas e playlists favoritas do YouTube e Spotify diretamente no seu canal de voz.
 
 -   **Suporte a Múltiplas Fontes**: Toca músicas e playlists do YouTube, YouTube Music e Spotify.
 -   **Controles Completos**: Comandos para tocar, pausar, pular, parar, gerenciar a fila e muito mais.
@@ -9,14 +9,14 @@ Um bot de música para Discord robusto e fácil de usar, construído com `discor
 -   **Seguro**: Gerenciamento de segredos através de um arquivo `.env` para manter suas chaves de API seguras.
 -   **Suporte a YouTube Premium**: Pode utilizar um arquivo de cookies para tocar conteúdo exclusivo do YouTube Premium.
 
-Para executar o PinoBeats, você precisará ter o Git e o Docker instalados na sua máquina.
+Para executar o TatuBeats, você precisará ter o Git e o Docker instalados na sua máquina.
 
 1.  Clone o Repositório
     Substitua `seu-usuario` pelo seu nome de usuário no GitHub.
 
     ```bash
-    git clone [https://github.com/seu-usuario/PinoBeats.git](https://github.com/seu-usuario/PinoBeats.git)
-    cd PinoBeats
+    git clone [https://github.com/seu-usuario/TatuBeats.git](https://github.com/seu-usuario/TatuBeats.git)
+    cd TatuBeats
     ```
 
 2.  Configure o Ambiente
@@ -49,8 +49,8 @@ Para executar o PinoBeats, você precisará ter o Git e o Docker instalados na s
     Com o Docker em execução, use os seguintes comandos no seu terminal:
 
     ```bash
-    docker build -t pinobeats .
-    docker run -d --name pinobeats -v "$(pwd)/.env:/app/.env:ro" -v "$(pwd)/cookies.txt:/app/cookies.txt:ro" pinobeats
+    docker build -t tatubeats .
+    docker run -d --name tatubeats -v "$(pwd)/.env:/app/.env:ro" -v "$(pwd)/cookies.txt:/app/cookies.txt:ro" tatubeats
     ```
 
     Nota: Se você não estiver usando o `cookies.txt`, pode omitir a parte `-v "$(pwd)/cookies.txt:/app/cookies.txt:ro"` do comando run.
@@ -60,7 +60,7 @@ Para executar o PinoBeats, você precisará ter o Git e o Docker instalados na s
     Para ver os logs do bot:
 
     ```bash
-    docker logs -f pinobeats
+    docker logs -f tatubeats
     ```
 
 O prefixo padrão do bot é `.`

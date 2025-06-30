@@ -49,7 +49,21 @@ class PinoBot(commands.Bot):
     async def setup_hook(self):
         """This is called when the bot logs in."""
         print("Carregando extensões (cogs)...")
-        for filename in os.listdir('cogs'):
+        # Garante que o MessageCog seja carregado primeiro, se houver dependências
+        cogs_order = ['message_cog.py', 'music_cog.py']
+        loaded_cogs = os.listdir('cogs')
+
+        for cog_file in cogs_order:
+            if cog_file in loaded_cogs:
+                try:
+                    await self.load_extension(f'cogs.{cog_file[:-3]}')
+                    print(f'  -> Cog {cog_file} carregado com sucesso.')
+                    loaded_cogs.remove(cog_file)
+                except Exception as e:
+                    print(f'  -> Falha ao carregar o cog {cog_file}: {e}')
+
+        # Carrega quaisquer outros cogs restantes
+        for filename in loaded_cogs:
             if filename.endswith('.py'):
                 try:
                     await self.load_extension(f'cogs.{filename[:-3]}')
@@ -63,7 +77,8 @@ class PinoBot(commands.Bot):
         print(f'Bot {self.user.name} está online e pronto!')
         print(f'ID do Bot: {self.user.id}')
         print('-----------------------------------------')
-        await self.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=".play"))
+        # --- STATUS MODIFICADO ---
+        await self.change_presence(activity=discord.Game(name="a vida fora..."))
 
 
 # --- Run the Bot ---
