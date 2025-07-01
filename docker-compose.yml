@@ -1,0 +1,29 @@
+# docker-compose.yml
+# Orquestra o ambiente de desenvolvimento local do TatuBeats.
+
+version: '3.8'
+
+services:
+  tatubeats:
+    # Constrói a imagem a partir do Dockerfile no diretório atual.
+    build: .
+    # Renomeia o contêiner para algo amigável no Docker Desktop.
+    container_name: tatubeats_bot
+    # Reinicia o contêiner automaticamente se ele parar por algum erro.
+    restart: unless-stopped
+
+    # Mapeia a porta 8080 do contêiner para a porta 8080 da sua máquina
+    # para que você possa acessar o health check em http://localhost:8080
+    ports:
+      - "8080:8080"
+
+    # Carrega as variáveis de ambiente do seu arquivo .env.
+    # NUNCA adicione o .env ao controle de versão (git).
+    env_file:
+      - .env
+
+    # É aqui que a mágica do hot-reloading acontece.
+    # Monta a pasta 'src' local na pasta '/app/src' dentro do contêiner.
+    # Qualquer alteração nos seus arquivos .py será refletida instantaneamente.
+    volumes:
+      - ./src:/app/src
