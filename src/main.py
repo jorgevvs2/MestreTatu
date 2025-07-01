@@ -1,3 +1,5 @@
+# D:/Codes/TatuBeats/src/main.py
+
 # -*- coding: utf-8 -*-
 import os
 import discord
@@ -14,9 +16,8 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 SPOTIFY_ID = os.getenv('SPOTIFY_CLIENT_ID')
 SPOTIFY_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 
-
 # --- Bot Class ---
-class PinoBot(commands.Bot):
+class TatuBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Initialize clients and options here to attach them to the bot instance
@@ -29,17 +30,21 @@ class PinoBot(commands.Bot):
             print(f"Erro ao inicializar o cliente Spotify: {e}. Verifique as credenciais.")
 
         self.ydl_options = {
-            'format': 'bestaudio/best', 'noplaylist': False, 'quiet': True,
-            'default_search': 'auto', 'source_address': '0.0.0.0',
-            'extractor_args': {'youtube': {'formats': 'missing_pot'}},
+            'format': 'bestaudio/best',
+            'noplaylist': False,
+            'quiet': True,
+            'default_search': 'auto',
+            'source_address': '0.0.0.0',
+            'ignoreerrors': True,
         }
 
-        cookie_file_path = 'cookies.txt'
+        # The path for the cookies file inside the Docker container
+        cookie_file_path = '../cookies.txt'
         if os.path.exists(cookie_file_path) and os.path.isfile(cookie_file_path):
             print("INFO: Arquivo de cookies encontrado. Usando para autenticação.")
             self.ydl_options['cookiefile'] = cookie_file_path
         else:
-            print(f"AVISO: Arquivo de cookies '{cookie_file_path}' não encontrado ou é um diretório.")
+            print(f"INFO: Arquivo de cookies '{cookie_file_path}' não encontrado. Continuando sem autenticação de cookies.")
 
         self.ffmpeg_options = {
             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
@@ -49,27 +54,15 @@ class PinoBot(commands.Bot):
     async def setup_hook(self):
         """This is called when the bot logs in."""
         print("Carregando extensões (cogs)...")
-        # Garante que o MessageCog seja carregado primeiro, se houver dependências
-        cogs_order = ['message_cog.py', 'music_cog.py']
-        loaded_cogs = os.listdir('cogs')
-
-        for cog_file in cogs_order:
-            if cog_file in loaded_cogs:
-                try:
-                    await self.load_extension(f'cogs.{cog_file[:-3]}')
-                    print(f'  -> Cog {cog_file} carregado com sucesso.')
-                    loaded_cogs.remove(cog_file)
-                except Exception as e:
-                    print(f'  -> Falha ao carregar o cog {cog_file}: {e}')
-
-        # Carrega quaisquer outros cogs restantes
-        for filename in loaded_cogs:
-            if filename.endswith('.py'):
-                try:
-                    await self.load_extension(f'cogs.{filename[:-3]}')
-                    print(f'  -> Cog {filename} carregado com sucesso.')
-                except Exception as e:
-                    print(f'  -> Falha ao carregar o cog {filename}: {e}')
+        cogs_to_load = ['message_cog', 'help_cog', 'music_cog']
+        for cog_name in cogs_to_load:
+            try:
+                await self.load_extension(f'cogs.{cog_name}')
+                print(f'  -> Cog {cog_name}.py carregado com sucesso.')
+            except commands.ExtensionNotFound:
+                print(f'  -> AVISO: Cog {cog_name}.py não encontrado.')
+            except Exception as e:
+                print(f'  -> FALHA ao carregar o cog {cog_name}.py: {e}')
 
     async def on_ready(self):
         """Event that is triggered when the bot is online and ready."""
@@ -77,7 +70,6 @@ class PinoBot(commands.Bot):
         print(f'Bot {self.user.name} está online e pronto!')
         print(f'ID do Bot: {self.user.id}')
         print('-----------------------------------------')
-        # --- STATUS MODIFICADO ---
         await self.change_presence(activity=discord.Game(name="a vida fora..."))
 
 
@@ -88,7 +80,7 @@ async def main():
     intents.guilds = True
     intents.voice_states = True
 
-    bot = PinoBot(command_prefix='.', intents=intents, help_command=None)
+    bot = TatuBot(command_prefix='.', intents=intents, help_command=None)
 
     try:
         await bot.start(TOKEN)

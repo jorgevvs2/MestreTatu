@@ -7,7 +7,9 @@ import random
 import re
 
 
-class MusicCog(commands.Cog):
+class MusicCog(commands.Cog, name="Música"):
+    """Cog para todos os comandos relacionados à reprodução de música."""
+
     def __init__(self, bot, spotify_client, ydl_options, ffmpeg_options):
         self.bot = bot
         self.spotify_client = spotify_client
@@ -29,20 +31,31 @@ class MusicCog(commands.Cog):
 
             with yt_dlp.YoutubeDL(self.ydl_options) as ydl:
                 try:
-                    info = ydl.extract_info(song_request['query'], download=False)['entries'][0]
+                    info = ydl.extract_info(song_request['query'], download=False)
+                    if not info or 'entries' not in info or not info['entries']:
+                        embed = self.message_cog.create_embed(
+                            f"Não consegui encontrar ou o vídeo está indisponível: `{song_request['title']}`. Pulando.",
+                            type="error")
+                        await self.message_cog.send_message(ctx, embed)
+                        await self.play_next(ctx)
+                        return
+
+                    video_info = info['entries'][0]
+
                 except Exception as e:
                     embed = self.message_cog.create_embed(
-                        f"Não consegui encontrar: `{song_request['title']}`. Pulando.", type="error")
+                        f"Ocorreu um erro ao processar: `{song_request['title']}`. Pulando.", type="error")
                     await self.message_cog.send_message(ctx, embed)
                     print(f"Erro ao buscar com yt-dlp: {e}")
                     await self.play_next(ctx)
                     return
 
-            url = info['url']
-            title = info['title']
+            url = video_info['url']
+            title = video_info.get('title', song_request['title'])
             source = discord.FFmpegPCMAudio(url, **self.ffmpeg_options)
             ctx.voice_client.play(source,
-                                  after=lambda e: asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop))
+                                  after=lambda err: asyncio.run_coroutine_threadsafe(self.play_next(ctx),
+                                                                                     self.bot.loop))
 
             embed = self.message_cog.create_embed(
                 f"Tocando agora: **{title}**\n(Pedido por: {song_request['requester']})")
@@ -51,7 +64,8 @@ class MusicCog(commands.Cog):
             embed = self.message_cog.create_embed("Fila de músicas terminada.")
             await self.message_cog.send_message(ctx, embed)
 
-    @commands.command(name='play', aliases=['p', 'tocar'])
+    @commands.command(name='play', aliases=['p', 'tocar'],
+                      help='Toca uma música ou playlist. Playlists são embaralhadas automaticamente.')
     async def play(self, ctx, *, search: str):
         if not ctx.author.voice:
             embed = self.message_cog.create_embed("Você precisa estar em um canal de voz para usar este comando!",
@@ -84,14 +98,14 @@ class MusicCog(commands.Cog):
                 while results['next']:
                     results = self.spotify_client.next(results)
                     all_tracks.extend(results['items'])
-                tracks_to_add = all_tracks
+
+                tracks_to_add = [item for item in all_tracks if item.get('track')]
 
                 if not tracks_to_add:
                     await self.message_cog.send_message(ctx, self.message_cog.create_embed(
                         "Essa playlist parece estar vazia ou é privada.", type="error"))
                     return
 
-                # Embaralha a playlist antes de adicionar
                 random.shuffle(tracks_to_add)
 
                 await self.message_cog.send_message(ctx, self.message_cog.create_embed(
@@ -100,13 +114,12 @@ class MusicCog(commands.Cog):
                 guild_id = ctx.guild.id
                 if guild_id not in self.music_queues: self.music_queues[guild_id] = []
                 for item in tracks_to_add:
-                    track = item.get('track')
-                    if track:
-                        query = f"{track['name']} {track['artists'][0]['name']}"
-                        song_info = {'type': 'search', 'query': query,
-                                     'title': f"{track['name']} - {track['artists'][0]['name']}",
-                                     'requester': ctx.author.mention}
-                        self.music_queues[guild_id].append(song_info)
+                    track = item['track']
+                    query = f"{track['name']} {track['artists'][0]['name']}"
+                    song_info = {'type': 'search', 'query': query,
+                                 'title': f"{track['name']} - {track['artists'][0]['name']}",
+                                 'requester': ctx.author.mention}
+                    self.music_queues[guild_id].append(song_info)
             except Exception as e:
                 await self.message_cog.send_message(ctx, self.message_cog.create_embed(
                     "Ocorreu um erro ao buscar a playlist do Spotify. Verifique o link.", type="error"))
@@ -119,13 +132,20 @@ class MusicCog(commands.Cog):
             try:
                 with yt_dlp.YoutubeDL(self.ydl_options) as ydl:
                     info = ydl.extract_info(search, download=False)
+
                 if 'entries' not in info or not info['entries']:
                     await self.message_cog.send_message(ctx, self.message_cog.create_embed(
-                        "Não encontrei vídeos nesta playlist ou o link é inválido.", type="error"))
+                        "Não encontrei vídeos nesta playlist, o link é inválido ou a playlist está vazia.",
+                        type="error"))
                     return
-                tracks_to_add = info['entries']
 
-                # Embaralha a playlist antes de adicionar
+                tracks_to_add = [entry for entry in info['entries'] if entry and entry.get('webpage_url')]
+
+                if not tracks_to_add:
+                    await self.message_cog.send_message(ctx, self.message_cog.create_embed(
+                        "Não encontrei vídeos válidos nesta playlist.", type="error"))
+                    return
+
                 random.shuffle(tracks_to_add)
 
                 await self.message_cog.send_message(ctx, self.message_cog.create_embed(
@@ -156,7 +176,8 @@ class MusicCog(commands.Cog):
         if not voice_client.is_playing() and not voice_client.is_paused():
             await self.play_next(ctx)
 
-    @commands.command(name='leave', aliases=['sair', 'disconnect'])
+    @commands.command(name='leave', aliases=['sair', 'disconnect'],
+                      help='Faz o bot sair do canal de voz e limpa a fila.')
     async def leave(self, ctx):
         voice_client = ctx.voice_client
         if voice_client and voice_client.is_connected():
@@ -170,7 +191,7 @@ class MusicCog(commands.Cog):
             await self.message_cog.send_message(ctx, self.message_cog.create_embed(
                 "Eu não estou em um canal de voz no momento.", type="error"))
 
-    @commands.command(name='skip', aliases=['pular'])
+    @commands.command(name='skip', aliases=['pular'], help='Pula para a próxima música da fila.')
     async def skip(self, ctx):
         voice_client = ctx.voice_client
         if voice_client and voice_client.is_playing():
@@ -180,7 +201,7 @@ class MusicCog(commands.Cog):
             await self.message_cog.send_message(ctx, self.message_cog.create_embed(
                 "Não há nenhuma música tocando para pular.", type="error"))
 
-    @commands.command(name='queue', aliases=['q', 'fila'])
+    @commands.command(name='queue', aliases=['q', 'fila'], help='Mostra as próximas 10 músicas na fila.')
     async def queue(self, ctx):
         guild_id = ctx.guild.id
         if guild_id not in self.music_queues or not self.music_queues[guild_id]:
@@ -194,7 +215,7 @@ class MusicCog(commands.Cog):
         embed.set_footer(text=f"Total de {len(self.music_queues[guild_id])} músicas na fila.")
         await self.message_cog.send_message(ctx, embed)
 
-    @commands.command(name='pause', aliases=['pausar'])
+    @commands.command(name='pause', aliases=['pausar'], help='Pausa a música que está tocando no momento.')
     async def pause(self, ctx):
         voice_client = ctx.voice_client
         if voice_client and voice_client.is_playing():
@@ -204,7 +225,7 @@ class MusicCog(commands.Cog):
             await self.message_cog.send_message(ctx, self.message_cog.create_embed("Não há música tocando para pausar.",
                                                                                    type="error"))
 
-    @commands.command(name='resume', aliases=['continuar'])
+    @commands.command(name='resume', aliases=['continuar'], help='Retoma a música que estava pausada.')
     async def resume(self, ctx):
         voice_client = ctx.voice_client
         if voice_client and voice_client.is_paused():
@@ -214,7 +235,7 @@ class MusicCog(commands.Cog):
             await self.message_cog.send_message(ctx, self.message_cog.create_embed("A música não está pausada.",
                                                                                    type="error"))
 
-    @commands.command(name='join', aliases=['entrar'])
+    @commands.command(name='join', aliases=['entrar'], help='Faz o bot entrar no seu canal de voz atual.')
     async def join(self, ctx):
         if not ctx.author.voice:
             await self.message_cog.send_message(ctx, self.message_cog.create_embed(
@@ -231,7 +252,7 @@ class MusicCog(commands.Cog):
             await self.message_cog.send_message(ctx, self.message_cog.create_embed(
                 f"Entrei no canal: **{voice_channel.name}**"))
 
-    @commands.command(name='stop', aliases=['parar'])
+    @commands.command(name='stop', aliases=['parar'], help='Para a música completamente e limpa a fila de reprodução.')
     async def stop(self, ctx):
         voice_client = ctx.voice_client
         guild_id = ctx.guild.id
@@ -244,7 +265,8 @@ class MusicCog(commands.Cog):
             await self.message_cog.send_message(ctx, self.message_cog.create_embed(
                 "Não há nenhuma música tocando no momento.", type="error"))
 
-    @commands.command(name='clear', aliases=['limpar'])
+    @commands.command(name='clear', aliases=['limpar'],
+                      help='Limpa todas as músicas da fila, mas não para a música atual.')
     async def clear(self, ctx):
         guild_id = ctx.guild.id
         if guild_id in self.music_queues and self.music_queues[guild_id]:
@@ -254,7 +276,7 @@ class MusicCog(commands.Cog):
         else:
             await self.message_cog.send_message(ctx, self.message_cog.create_embed("A fila já está vazia."))
 
-    @commands.command(name='ds')
+    @commands.command(name='ds', help='Toca a playlist temática de Dark Souls (definida no .env).')
     async def ds(self, ctx):
         playlist_url = os.getenv('DS_PLAYLIST')
         if not playlist_url:
@@ -263,7 +285,26 @@ class MusicCog(commands.Cog):
             return
         await self.play(ctx, search=playlist_url)
 
-    @commands.command(name='shuffle', aliases=['misturar', 'embaralhar'])
+    @commands.command(name='wicked', help='Toca a playlist temática de Wicked (definida no .env).')
+    async def wicked(self, ctx):
+        playlist_url = os.getenv('WICKED_PLAYLIST')
+        if not playlist_url:
+            await self.message_cog.send_message(ctx, self.message_cog.create_embed(
+                "A URL da playlist 'WICKED_PLAYLIST' não foi encontrada no arquivo .env.", type="error"))
+            return
+        await self.play(ctx, search=playlist_url)
+
+    @commands.command(name='xama', help='Toca a playlist temática de Xamã (definida no .env).')
+    async def xama(self, ctx):
+        playlist_url = os.getenv('XAMA_PLAYLIST')
+        if not playlist_url:
+            await self.message_cog.send_message(ctx, self.message_cog.create_embed(
+                "A URL da playlist 'XAMA_PLAYLIST' não foi encontrada no arquivo .env.", type="error"))
+            return
+        await self.play(ctx, search=playlist_url)
+
+    @commands.command(name='shuffle', aliases=['misturar', 'embaralhar'],
+                      help='Embaralha a ordem das músicas que já estão na fila.')
     async def shuffle(self, ctx):
         guild_id = ctx.guild.id
         if guild_id in self.music_queues and len(self.music_queues[guild_id]) > 1:
