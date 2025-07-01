@@ -9,6 +9,8 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from dotenv import load_dotenv
 import logging
+from threading import Thread # Importe a classe Thread
+from flask import Flask # Importe o Flask
 
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -21,13 +23,30 @@ SPOTIFY_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 # Configura um logger para o bot principal
 log = logging.getLogger(__name__)
 
-# --- Bot Class ---
+# --- LÓGICA DO SERVIDOR WEB (PARA CLOUD RUN) ---
+# Cria uma instância simples do Flask
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    """Endpoint que o Cloud Run usará para verificar se o contêiner está vivo."""
+    return "TatuBeats health check OK.", 200
+
+def run_web_server():
+    """Função que será executada na thread secundária."""
+    # O Cloud Run define a variável de ambiente PORT.
+    # O servidor deve escutar em 0.0.0.0 para ser acessível de fora do contêiner.
+    port = int(os.environ.get("PORT", 8080))
+    log.info(f"Iniciando servidor web para health checks na porta {port}...")
+    app.run(host='0.0.0.0', port=port)
+
+# --- Bot Class (sem alterações) ---
 class TatuBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         log.info("Inicializando o TatuBot...")
 
-        # Inicializa clientes e opções para anexá-los à instância do bot
+        # ... (o resto do seu __init__ permanece exatamente o mesmo) ...
         try:
             self.spotify_client = spotipy.Spotify(
                 auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_ID, client_secret=SPOTIFY_SECRET)
@@ -48,7 +67,6 @@ class TatuBot(commands.Bot):
         }
         log.debug(f"Opções do YDL configuradas: {self.ydl_options}")
 
-        # O caminho para o arquivo de cookies dentro do contêiner Docker
         cookie_file_path = 'cookies.txt'
         if os.path.exists(cookie_file_path) and os.path.isfile(cookie_file_path):
             log.info("Arquivo de cookies encontrado. Usando para autenticação.")
@@ -58,7 +76,7 @@ class TatuBot(commands.Bot):
 
         self.ffmpeg_options = {
             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-            'options': '-vn -loglevel error -nostats',  # Add -loglevel error and -nostats
+            'options': '-vn -loglevel error -nostats',
         }
         log.debug(f"Opções do FFmpeg configuradas: {self.ffmpeg_options}")
 
@@ -87,13 +105,17 @@ class TatuBot(commands.Bot):
 
 # --- Executa o Bot ---
 async def main():
-    # Configuração do logging para exibir no console do Docker
-    # Nível INFO captura os passos importantes; DEBUG capturaria tudo.
+    # Configuração do logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s:%(levelname)s:%(name)s: %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
+
+    # --- INICIA A THREAD DO SERVIDOR WEB ---
+    # A thread é 'daemon' para que ela termine automaticamente quando o bot principal parar.
+    web_thread = Thread(target=run_web_server, daemon=True)
+    web_thread.start()
 
     intents = discord.Intents.default()
     intents.message_content = True
@@ -103,6 +125,7 @@ async def main():
     bot = TatuBot(command_prefix='.', intents=intents, help_command=None)
 
     try:
+        # O bot inicia e roda na thread principal
         await bot.start(TOKEN)
     except discord.errors.LoginFailure:
         log.critical("ERRO DE LOGIN: Token inválido. Verifique o token no seu arquivo .env.")
