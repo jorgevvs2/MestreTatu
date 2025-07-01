@@ -34,13 +34,14 @@ def run_web_server():
     # Agora a função 'serve' está definida e funcionará corretamente.
     serve(app, host='0.0.0.0', port=port)
 
-# --- Bot Class ---
+
 class TatuBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         log.info("Inicializando o TatuBot...")
 
-        # --- CORREÇÃO: Obtenha as variáveis de ambiente AQUI, no momento da inicialização ---
+        # --- CORREÇÃO: Adicione este bloco para inicializar o cliente Spotify ---
+        # This ensures the `spotify_client` attribute is always set on the bot instance.
         try:
             spotify_id = os.getenv('SPOTIFY_CLIENT_ID')
             spotify_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
@@ -49,20 +50,23 @@ class TatuBot(commands.Bot):
                 log.warning("Credenciais do Spotify não encontradas. A funcionalidade de playlist do Spotify será desativada.")
                 self.spotify_client = None
             else:
+                # Attempt to create the client
                 self.spotify_client = spotipy.Spotify(
                     auth_manager=SpotifyClientCredentials(
                         client_id=spotify_id,
                         client_secret=spotify_secret
                     )
                 )
-                # Test the credentials to ensure they are valid
+                # Make a test call to verify credentials
                 self.spotify_client.search(q='test', type='track', limit=1)
                 log.info("Cliente Spotify inicializado e autenticado com sucesso.")
-
         except Exception as e:
             self.spotify_client = None
             log.error(f"Erro ao inicializar o cliente Spotify. Verifique as credenciais ou a API.", exc_info=True)
+        # --- FIM DA CORREÇÃO ---
 
+
+        # --- IMPROVEMENT 1: Make yt-dlp more resilient and browser-like ---
         self.ydl_options = {
             'format': 'bestaudio/best',
             'noplaylist': False,
@@ -71,6 +75,12 @@ class TatuBot(commands.Bot):
             'source_address': '0.0.0.0',
             'ignoreerrors': True,
             'force_ipv4': True,
+            'extractor_retries': 3,
+            # --- NEW: Add a standard browser User-Agent ---
+            # This makes requests look more legitimate and less likely to be throttled.
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'
+            }
         }
         log.debug(f"Opções do YDL configuradas: {self.ydl_options}")
 
@@ -79,11 +89,18 @@ class TatuBot(commands.Bot):
             log.info("Arquivo de cookies encontrado. Usando para autenticação.")
             self.ydl_options['cookiefile'] = cookie_file_path
         else:
-            log.info(f"Arquivo de cookies '{cookie_file_path}' não encontrado. Continuando sem autenticação de cookies.")
+            log.info(
+                f"Arquivo de cookies '{cookie_file_path}' não encontrado. Continuando sem autenticação de cookies.")
 
+        # --- IMPROVEMENT 2: Use all modern FFmpeg reconnection options ---
+        # Now that you are using the 'bookworm' base image, we can use all modern options.
         self.ffmpeg_options = {
-            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-            'options': '-vn -loglevel error -nostats',
+            'before_options': (
+                '-reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1 '
+                '-reconnect_on_http_error 4xx,5xx '  # Reconnect on HTTP client/server errors
+                '-reconnect_delay_max 15'
+            ),
+            'options': '-vn -loglevel warning -nostats',
         }
         log.debug(f"Opções do FFmpeg configuradas: {self.ffmpeg_options}")
 
@@ -91,7 +108,8 @@ class TatuBot(commands.Bot):
     async def setup_hook(self):
         """Chamado quando o bot faz login, para carregar as extensões."""
         log.info("Carregando extensões (cogs)...")
-        cogs_to_load = ['message_cog', 'help_cog', 'music_cog', 'rpg_cog']
+        # Adicione 'stations_cog' à lista
+        cogs_to_load = ['message_cog', 'help_cog', 'music_cog', 'rpg_cog', 'stations_cog']
         for cog_name in cogs_to_load:
             try:
                 await self.load_extension(f'cogs.{cog_name}')
@@ -108,7 +126,6 @@ class TatuBot(commands.Bot):
         log.info(f'ID do Bot: {self.user.id}')
         log.info('-----------------------------------------')
         await self.change_presence(activity=discord.Game(name="a vida fora..."))
-
 
 # --- Executa o Bot ---
 async def main():

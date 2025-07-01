@@ -15,9 +15,7 @@ log = logging.getLogger(__name__)
 
 
 # --- FUNÇÕES HELPER SÍNCRONAS ---
-# Criamos funções síncronas separadas para serem executadas em threads.
-# Isso mantém o código limpo e isola as operações bloqueantes.
-
+# (These helper functions are correct and do not need changes)
 def ydl_extract_info_sync(ydl_options, query, download=False):
     """Helper síncrono para rodar yt-dlp sem bloquear o loop de eventos."""
     with yt_dlp.YoutubeDL(ydl_options) as ydl:
@@ -43,16 +41,28 @@ class MusicCog(commands.Cog, name="Música"):
         self.ffmpeg_options = bot.ffmpeg_options
         self.music_queues = {}
         self.last_ctx = {}
-        self.message_cog = None
+        # --- CHANGE 1: Use a private variable for the cached cog instance ---
+        self._message_cog_instance = None
         log.info("MusicCog inicializado.")
 
+    # --- CHANGE 2: Create a property to lazy-load the MessageCog ---
+    @property
+    def message_cog(self):
+        """
+        Property to get and cache the MessageCog instance on-demand.
+        This is a robust way to handle inter-cog dependencies.
+        """
+        if self._message_cog_instance is None:
+            self._message_cog_instance = self.bot.get_cog('MessageCog')
+            if self._message_cog_instance is None:
+                log.critical("CRITICAL: MusicCog could not find the MessageCog. It might not be loaded.")
+        return self._message_cog_instance
+
     async def cog_before_invoke(self, ctx: commands.Context):
-        """Garante que temos uma referência ao MessageCog e ao contexto mais recente."""
+        """Garante que temos uma referência ao contexto mais recente."""
         self.last_ctx[ctx.guild.id] = ctx
-        if not self.message_cog:
-            self.message_cog = self.bot.get_cog('MessageCog')
-            if not self.message_cog:
-                log.critical("AVISO CRÍTICO: [MusicCog] não conseguiu encontrar o MessageCog.")
+        # --- CHANGE 3: The logic to get message_cog is no longer needed here ---
+        # It is now handled by the @property.
 
     def handle_after_play(self, error, ctx):
         """Função de callback segura chamada após uma música terminar."""
@@ -76,18 +86,18 @@ class MusicCog(commands.Cog, name="Música"):
             try:
                 log.debug(f"[{guild_id}] Agendando extração com yt-dlp para: {song_request['query']}")
 
-                # --- CORREÇÃO: Executa a chamada bloqueante em uma thread separada ---
                 info = await asyncio.to_thread(
                     ydl_extract_info_sync, self.ydl_options, song_request['query']
                 )
 
                 if not info or 'entries' not in info or not info['entries']:
                     log.warning(f"[{guild_id}] yt-dlp não retornou 'entries' para: {song_request['title']}")
+                    # No change needed here, self.message_cog will now work via the property
                     embed = self.message_cog.create_embed(
                         f"Não consegui encontrar ou o vídeo está indisponível: `{song_request['title']}`. Pulando.",
                         type="error")
                     await self.message_cog.send_message(ctx, embed)
-                    await self.play_next(ctx)  # Tenta a próxima da fila
+                    await self.play_next(ctx)
                     return
 
                 video_info = info['entries'][0]
@@ -107,7 +117,7 @@ class MusicCog(commands.Cog, name="Música"):
                 embed = self.message_cog.create_embed(
                     f"Ocorreu um erro crítico ao tentar tocar: `{song_request['title']}`. Pulando.", type="error")
                 await self.message_cog.send_message(ctx, embed)
-                await self.play_next(ctx)  # Tenta a próxima da fila
+                await self.play_next(ctx)
         else:
             log.info(f"[{guild_id}] Fila de músicas terminada.")
             embed = self.message_cog.create_embed("Fila de músicas terminada.")
@@ -288,9 +298,6 @@ class MusicCog(commands.Cog, name="Música"):
             ctx.voice_client.stop()
             await self.message_cog.send_message(ctx, self.message_cog.create_embed("Música parada e fila limpa!",
                                                                                    type="success"))
-        else:
-            await self.message_cog.send_message(ctx, self.message_cog.create_embed(
-                "Não há nenhuma música tocando no momento.", type="error"))
 
     @commands.command(name='clear', aliases=['limpar'],
                       help='Limpa todas as músicas da fila, mas não para a música atual.')
