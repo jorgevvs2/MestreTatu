@@ -29,9 +29,9 @@ def health_check():
 def run_web_server():
     """Função que será executada na thread secundária."""
     port = int(os.environ.get("PORT", 8080))
-    log.info(f"Iniciando servidor web para health checks na porta {port}...")
-    # Use 'waitress' or 'gunicorn' in a real production scenario, but this is fine for a health check.
-    app.run(host='0.0.0.0', port=port)
+    log.info(f"Iniciando servidor web de produção (Waitress) na porta {port}...")
+    # Substitua o app.run() pelo servidor de produção
+    serve(app, host='0.0.0.0', port=port)
 
 # --- Bot Class ---
 class TatuBot(commands.Bot):
