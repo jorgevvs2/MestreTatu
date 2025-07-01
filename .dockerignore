@@ -1,36 +1,24 @@
-# Docker and Git files
-Dockerfile
-.dockerignore
-.git
-.gitignore
+# .dockerignore
 
-# Secrets and sensitive files
-.env
-*.env
-cookies.txt
-src/cookies.txt
+# Ignorar o ambiente virtual do Python
+.venv/
+venv/
 
-# Environments and dependencies
-.venv
-venv
-env
-node_modules
-
-# Python cache
+# Ignorar caches do Python
 __pycache__/
 *.pyc
+*.pyo
 
-# IDE and editor files
+# Ignorar arquivos de configuração de IDEs
 .vscode/
 .idea/
 
-# Log files
-*.log
-discord.log
+# Ignorar o cache de embeddings gerado pelo bot
+rpg_embeddings_cache.json
 
-# Cache files
-.cache
-src/.cache
+# Ignorar arquivos do Git
+.git
+.gitignore
 
-# Documentation
-*.md
+# NUNCA inclua seu arquivo de segredos na imagem Docker
+.env

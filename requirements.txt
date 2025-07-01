@@ -3,3 +3,7 @@ yt-dlp
 spotipy
 python-dotenv
 PyNaCl
+google-generativeai
+PyMuPDF
+numpy
+scikit-learn

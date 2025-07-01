@@ -8,7 +8,9 @@ import asyncio
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from dotenv import load_dotenv
+import logging
 
+# Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
 
 # --- Configuração Inicial ---
@@ -16,18 +18,24 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 SPOTIFY_ID = os.getenv('SPOTIFY_CLIENT_ID')
 SPOTIFY_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 
+# Configura um logger para o bot principal
+log = logging.getLogger(__name__)
+
 # --- Bot Class ---
 class TatuBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Initialize clients and options here to attach them to the bot instance
+        log.info("Inicializando o TatuBot...")
+
+        # Inicializa clientes e opções para anexá-los à instância do bot
         try:
             self.spotify_client = spotipy.Spotify(
                 auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_ID, client_secret=SPOTIFY_SECRET)
             )
+            log.info("Cliente Spotify inicializado com sucesso.")
         except Exception as e:
             self.spotify_client = None
-            print(f"Erro ao inicializar o cliente Spotify: {e}. Verifique as credenciais.")
+            log.error(f"Erro ao inicializar o cliente Spotify: {e}. Verifique as credenciais.", exc_info=True)
 
         self.ydl_options = {
             'format': 'bestaudio/best',
@@ -36,45 +44,57 @@ class TatuBot(commands.Bot):
             'default_search': 'auto',
             'source_address': '0.0.0.0',
             'ignoreerrors': True,
+            'force_ipv4': True,
         }
+        log.debug(f"Opções do YDL configuradas: {self.ydl_options}")
 
-        # The path for the cookies file inside the Docker container
-        cookie_file_path = '../cookies.txt'
+        # O caminho para o arquivo de cookies dentro do contêiner Docker
+        cookie_file_path = 'cookies.txt'
         if os.path.exists(cookie_file_path) and os.path.isfile(cookie_file_path):
-            print("INFO: Arquivo de cookies encontrado. Usando para autenticação.")
+            log.info("Arquivo de cookies encontrado. Usando para autenticação.")
             self.ydl_options['cookiefile'] = cookie_file_path
         else:
-            print(f"INFO: Arquivo de cookies '{cookie_file_path}' não encontrado. Continuando sem autenticação de cookies.")
+            log.info(f"Arquivo de cookies '{cookie_file_path}' não encontrado. Continuando sem autenticação de cookies.")
 
         self.ffmpeg_options = {
             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-            'options': '-vn',
+            'options': '-vn -loglevel error -nostats',  # Add -loglevel error and -nostats
         }
+        log.debug(f"Opções do FFmpeg configuradas: {self.ffmpeg_options}")
+
 
     async def setup_hook(self):
-        """This is called when the bot logs in."""
-        print("Carregando extensões (cogs)...")
-        cogs_to_load = ['message_cog', 'help_cog', 'music_cog']
+        """Chamado quando o bot faz login, para carregar as extensões."""
+        log.info("Carregando extensões (cogs)...")
+        cogs_to_load = ['message_cog', 'help_cog', 'music_cog', 'rpg_cog']
         for cog_name in cogs_to_load:
             try:
                 await self.load_extension(f'cogs.{cog_name}')
-                print(f'  -> Cog {cog_name}.py carregado com sucesso.')
+                log.info(f'-> Cog {cog_name}.py carregado com sucesso.')
             except commands.ExtensionNotFound:
-                print(f'  -> AVISO: Cog {cog_name}.py não encontrado.')
+                log.warning(f'-> AVISO: Cog {cog_name}.py não encontrado.')
             except Exception as e:
-                print(f'  -> FALHA ao carregar o cog {cog_name}.py: {e}')
+                log.error(f'-> FALHA ao carregar o cog {cog_name}.py.', exc_info=True)
 
     async def on_ready(self):
-        """Event that is triggered when the bot is online and ready."""
-        print('-----------------------------------------')
-        print(f'Bot {self.user.name} está online e pronto!')
-        print(f'ID do Bot: {self.user.id}')
-        print('-----------------------------------------')
+        """Evento acionado quando o bot está online e pronto."""
+        log.info('-----------------------------------------')
+        log.info(f'Bot {self.user.name} está online e pronto!')
+        log.info(f'ID do Bot: {self.user.id}')
+        log.info('-----------------------------------------')
         await self.change_presence(activity=discord.Game(name="a vida fora..."))
 
 
-# --- Run the Bot ---
+# --- Executa o Bot ---
 async def main():
+    # Configuração do logging para exibir no console do Docker
+    # Nível INFO captura os passos importantes; DEBUG capturaria tudo.
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s:%(levelname)s:%(name)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
     intents = discord.Intents.default()
     intents.message_content = True
     intents.guilds = True
@@ -85,9 +105,9 @@ async def main():
     try:
         await bot.start(TOKEN)
     except discord.errors.LoginFailure:
-        print("ERRO: Token inválido. Verifique o token no seu arquivo .env.")
+        log.critical("ERRO DE LOGIN: Token inválido. Verifique o token no seu arquivo .env.")
     except Exception as e:
-        print(f"Ocorreu um erro ao iniciar o bot: {e}")
+        log.critical("Ocorreu um erro fatal ao iniciar o bot.", exc_info=True)
 
 
 if __name__ == "__main__":
