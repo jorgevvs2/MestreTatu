@@ -9,22 +9,16 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from dotenv import load_dotenv
 import logging
-from threading import Thread # Importe a classe Thread
-from flask import Flask # Importe o Flask
+from threading import Thread
+from flask import Flask
 
-# Carrega as variáveis de ambiente do arquivo .env
+# Carrega as variáveis de ambiente do arquivo .env (this is fine for local testing)
 load_dotenv()
-
-# --- Configuração Inicial ---
-TOKEN = os.getenv('DISCORD_TOKEN')
-SPOTIFY_ID = os.getenv('SPOTIFY_CLIENT_ID')
-SPOTIFY_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 
 # Configura um logger para o bot principal
 log = logging.getLogger(__name__)
 
 # --- LÓGICA DO SERVIDOR WEB (PARA CLOUD RUN) ---
-# Cria uma instância simples do Flask
 app = Flask(__name__)
 
 @app.route('/')
@@ -34,27 +28,39 @@ def health_check():
 
 def run_web_server():
     """Função que será executada na thread secundária."""
-    # O Cloud Run define a variável de ambiente PORT.
-    # O servidor deve escutar em 0.0.0.0 para ser acessível de fora do contêiner.
     port = int(os.environ.get("PORT", 8080))
     log.info(f"Iniciando servidor web para health checks na porta {port}...")
+    # Use 'waitress' or 'gunicorn' in a real production scenario, but this is fine for a health check.
     app.run(host='0.0.0.0', port=port)
 
-# --- Bot Class (sem alterações) ---
+# --- Bot Class ---
 class TatuBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         log.info("Inicializando o TatuBot...")
 
-        # ... (o resto do seu __init__ permanece exatamente o mesmo) ...
+        # --- CORREÇÃO: Obtenha as variáveis de ambiente AQUI, no momento da inicialização ---
         try:
-            self.spotify_client = spotipy.Spotify(
-                auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_ID, client_secret=SPOTIFY_SECRET)
-            )
-            log.info("Cliente Spotify inicializado com sucesso.")
+            spotify_id = os.getenv('SPOTIFY_CLIENT_ID')
+            spotify_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+
+            if not spotify_id or not spotify_secret:
+                log.warning("Credenciais do Spotify não encontradas. A funcionalidade de playlist do Spotify será desativada.")
+                self.spotify_client = None
+            else:
+                self.spotify_client = spotipy.Spotify(
+                    auth_manager=SpotifyClientCredentials(
+                        client_id=spotify_id,
+                        client_secret=spotify_secret
+                    )
+                )
+                # Test the credentials to ensure they are valid
+                self.spotify_client.search(q='test', type='track', limit=1)
+                log.info("Cliente Spotify inicializado e autenticado com sucesso.")
+
         except Exception as e:
             self.spotify_client = None
-            log.error(f"Erro ao inicializar o cliente Spotify: {e}. Verifique as credenciais.", exc_info=True)
+            log.error(f"Erro ao inicializar o cliente Spotify. Verifique as credenciais ou a API.", exc_info=True)
 
         self.ydl_options = {
             'format': 'bestaudio/best',
@@ -113,9 +119,14 @@ async def main():
     )
 
     # --- INICIA A THREAD DO SERVIDOR WEB ---
-    # A thread é 'daemon' para que ela termine automaticamente quando o bot principal parar.
     web_thread = Thread(target=run_web_server, daemon=True)
     web_thread.start()
+
+    # --- CORREÇÃO: Obtenha o token do bot aqui ---
+    TOKEN = os.getenv('DISCORD_TOKEN')
+    if not TOKEN:
+        log.critical("ERRO FATAL: DISCORD_TOKEN não foi encontrado nas variáveis de ambiente. O bot não pode iniciar.")
+        return
 
     intents = discord.Intents.default()
     intents.message_content = True
@@ -125,10 +136,9 @@ async def main():
     bot = TatuBot(command_prefix='.', intents=intents, help_command=None)
 
     try:
-        # O bot inicia e roda na thread principal
         await bot.start(TOKEN)
     except discord.errors.LoginFailure:
-        log.critical("ERRO DE LOGIN: Token inválido. Verifique o token no seu arquivo .env.")
+        log.critical("ERRO DE LOGIN: O token do Discord fornecido é inválido.")
     except Exception as e:
         log.critical("Ocorreu um erro fatal ao iniciar o bot.", exc_info=True)
 
