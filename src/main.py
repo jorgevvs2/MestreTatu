@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import logging
 from threading import Thread
 from flask import Flask
+from waitress import serve # <--- ADD THIS LINE
 
 # Carrega as variáveis de ambiente do arquivo .env (this is fine for local testing)
 load_dotenv()
@@ -30,7 +31,7 @@ def run_web_server():
     """Função que será executada na thread secundária."""
     port = int(os.environ.get("PORT", 8080))
     log.info(f"Iniciando servidor web de produção (Waitress) na porta {port}...")
-    # Substitua o app.run() pelo servidor de produção
+    # Agora a função 'serve' está definida e funcionará corretamente.
     serve(app, host='0.0.0.0', port=port)
 
 # --- Bot Class ---
