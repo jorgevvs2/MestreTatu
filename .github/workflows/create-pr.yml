@@ -16,6 +16,12 @@ jobs:
     # Usa a última versão do Ubuntu como ambiente de execução.
     runs-on: ubuntu-latest
 
+    # --- CORREÇÃO: Adicione este bloco de permissões ---
+    # Concede permissões de escrita para o conteúdo e para pull requests.
+    permissions:
+      contents: write
+      pull-requests: write
+
     # Define os passos que o job executará.
     steps:
       # 1. Checkout do código: A ação precisa ter acesso ao seu código.
@@ -28,13 +34,13 @@ jobs:
         with:
           # A branch de origem (de onde vêm as mudanças).
           source_branch: "develop"
-          
+
           # A branch de destino (para onde as mudanças vão).
           destination_branch: "main"
-          
+
           # Título do Pull Request.
           pr_title: "Sync: develop -> main"
-          
+
           # Corpo (descrição) do Pull Request. Use markdown para formatar.
           pr_body: |
             Este PR foi criado automaticamente pela GitHub Actions.
@@ -43,7 +49,7 @@ jobs:
             
             Por favor, revise as mudanças antes de fazer o merge.
 
-          
+
           # Token de autenticação. O GITHUB_TOKEN é gerado automaticamente
           # e de forma segura pelo GitHub para cada execução do workflow.
           github_token: ${{ secrets.GITHUB_TOKEN }}
