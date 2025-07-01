@@ -1,0 +1,55 @@
+# .github/workflows/create-pr.yml
+
+# Nome do workflow, que aparecerá na aba "Actions" do seu repositório.
+name: Create Pull Request from Develop to Main
+
+# Define o gatilho (trigger) para esta ação.
+on:
+  push:
+    # Roda a ação apenas quando houver um push na branch 'develop'.
+    branches:
+      - develop
+
+# Define os "trabalhos" (jobs) que serão executados.
+jobs:
+  create_pull_request:
+    # Usa a última versão do Ubuntu como ambiente de execução.
+    runs-on: ubuntu-latest
+
+    # --- CORREÇÃO: Adicione este bloco de permissões ---
+    # Concede permissões de escrita para o conteúdo e para pull requests.
+    permissions:
+      contents: write
+      pull-requests: write
+
+    # Define os passos que o job executará.
+    steps:
+      # 1. Checkout do código: A ação precisa ter acesso ao seu código.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Cria o Pull Request: Usa uma ação da comunidade para criar o PR.
+      - name: Create Pull Request
+        uses: repo-sync/pull-request@v2
+        with:
+          # A branch de origem (de onde vêm as mudanças).
+          source_branch: "develop"
+
+          # A branch de destino (para onde as mudanças vão).
+          destination_branch: "main"
+
+          # Título do Pull Request.
+          pr_title: "Sync: develop -> main"
+
+          # Corpo (descrição) do Pull Request. Use markdown para formatar.
+          pr_body: |
+            Este PR foi criado automaticamente pela GitHub Actions.
+            
+            Ele sincroniza as últimas atualizações da branch `develop` com a `main`.
+            
+            Por favor, revise as mudanças antes de fazer o merge.
+
+
+          # Token de autenticação. O GITHUB_TOKEN é gerado automaticamente
+          # e de forma segura pelo GitHub para cada execução do workflow.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
