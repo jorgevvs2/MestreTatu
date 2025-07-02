@@ -6,3 +6,5 @@ PyNaCl
 google-generativeai
 Flask
 waitress
+requests
+PyMuPDF
