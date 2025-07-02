@@ -27,3 +27,4 @@ services:
     # Qualquer alteração nos seus arquivos .py será refletida instantaneamente.
     volumes:
       - ./src:/app/src
+      - ./rpg_books:/app/rpg_books
