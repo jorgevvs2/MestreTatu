@@ -1,10 +1,22 @@
+# Core do Bot
 discord.py
+python-dotenv
+
+# Funcionalidades de Música
 yt-dlp
 spotipy
-python-dotenv
 PyNaCl
+
+# Funcionalidades de IA e Web
 google-generativeai
+protobuf
 Flask
 waitress
 requests
+
+# Utilitários e Geração de Gráficos
 PyMuPDF
+faker
+pandas
+plotly
+kaleido

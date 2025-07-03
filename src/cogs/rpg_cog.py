@@ -11,7 +11,7 @@ import google.generativeai as genai
 # Obtém um logger específico para este módulo.
 log = logging.getLogger(__name__)
 QUERY_TIMEOUT = 60  # Aumentamos um pouco o timeout para acomodar a busca
-RPG_BOOKS_PATH = "rpg_books"  # Caminho para a pasta com os PDFs
+RPG_BOOKS_PATH = "src/rpg_books"  # Caminho para a pasta com os PDFs
 
 
 class RPGCog(commands.Cog, name="Mestre de RPG"):
