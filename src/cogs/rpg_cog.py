@@ -1,5 +1,3 @@
-# D:/Codes/TatuBeats/src/cogs/rpg_cog.py
-
 import os
 import discord
 import fitz

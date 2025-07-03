@@ -6,17 +6,12 @@ from typing import Dict, Any
 
 
 class DiceCog(commands.Cog, name="Ferramentas de RPG"):
-    """Um Cog para fornecer ferramentas úteis para sessões de RPG, como um rolador de dados avançado."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     def _parse_and_roll(self, expression: str) -> Dict[str, Any]:
-        """
-        Interpreta uma expressão de dados no formato XdY[kZdH/L][+/-M] e retorna os resultados.
-        Ex: 2d20, d20+5, 4d6kh3 (role 4d6, mantenha os 3 maiores)
-        """
-        # Regex para capturar: (NumDados)d(Lados)[(Keep/Drop)(Modificador)]
+
         match = re.match(r'(\d+)?d(\d+)((?:[kd][hl])?\d+)?([+-]\d+)?', expression, re.IGNORECASE)
 
         if not match:
@@ -31,12 +26,10 @@ class DiceCog(commands.Cog, name="Ferramentas de RPG"):
         if num_dice <= 0 or num_sides <= 0 or num_dice > 100:
             raise ValueError("Número de dados ou lados inválido. Use valores positivos e no máximo 100 dados.")
 
-        # Realiza a rolagem inicial
         all_rolls = [random.randint(1, num_sides) for _ in range(num_dice)]
         rolls_to_sum = list(all_rolls)
         dropped_rolls = []
 
-        # Lógica para manter/descartar (keep/drop)
         if keep_drop_str:
             kd_match = re.match(r'([kd])([hl])?(\d+)', keep_drop_str, re.IGNORECASE)
             if kd_match:
@@ -48,19 +41,19 @@ class DiceCog(commands.Cog, name="Ferramentas de RPG"):
 
                 sorted_rolls = sorted(rolls_to_sum)
 
-                if mode.lower() == 'k':  # Manter (Keep)
-                    if high_low and high_low.lower() == 'l':  # Manter os menores
+                if mode.lower() == 'k':
+                    if high_low and high_low.lower() == 'l':
                         rolls_to_sum = sorted_rolls[:count]
                         dropped_rolls = sorted_rolls[count:]
-                    else:  # Manter os maiores (padrão)
+                    else:
                         rolls_to_sum = sorted_rolls[-count:]
                         dropped_rolls = sorted_rolls[:-count]
 
-                elif mode.lower() == 'd':  # Descartar (Drop)
-                    if high_low and high_low.lower() == 'h':  # Descartar os maiores
+                elif mode.lower() == 'd':
+                    if high_low and high_low.lower() == 'h':
                         rolls_to_sum = sorted_rolls[:-count]
                         dropped_rolls = sorted_rolls[-count:]
-                    else:  # Descartar os menores (padrão)
+                    else:
                         rolls_to_sum = sorted_rolls[count:]
                         dropped_rolls = sorted_rolls[:count]
 
@@ -76,18 +69,14 @@ class DiceCog(commands.Cog, name="Ferramentas de RPG"):
     @commands.command(name='roll', aliases=['r'],
                       help='Rola dados usando a notação de RPG (ex: 2d6, d20+5, 4d6kh3, adv).')
     async def roll(self, ctx: commands.Context, *, expression: str):
-        """
-        Comando principal para rolar dados.
-        Aceita notação complexa e casos especiais como 'adv'/'dis'.
-        """
         expression = expression.lower().strip().replace(" ", "")
 
         # Casos especiais: Vantagem e Desvantagem
         if expression in ['adv', 'advantage']:
-            expression = '2d20kh1'  # Converte para a notação padrão
+            expression = '2d20kh1'
 
         if expression in ['dis', 'disadvantage']:
-            expression = '2d20kl1'  # Converte para a notação padrão
+            expression = '2d20kl1'
 
         # Caso geral
         try:
@@ -99,7 +88,6 @@ class DiceCog(commands.Cog, name="Ferramentas de RPG"):
                 color=discord.Color.blue()
             )
 
-            # Formata o cálculo para total transparência
             rolls_str = " + ".join(map(str, roll_data['final_rolls']))
             modifier_str = f" {roll_data['modifier']:+}" if roll_data['modifier'] != 0 else ""
             calculation = f"Soma: ({rolls_str}){modifier_str} = {roll_data['total']}"
@@ -123,5 +111,4 @@ class DiceCog(commands.Cog, name="Ferramentas de RPG"):
 
 
 async def setup(bot: commands.Bot):
-    """Função que o discord.py chama para carregar a cog."""
     await bot.add_cog(DiceCog(bot))

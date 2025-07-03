@@ -1,80 +1,84 @@
-# TatuBeats 🎶
+# Mestre Tatu 🎲
 
-Um bot de música para Discord robusto e fácil de usar, construído com `discord.py` e containerizado com Docker. TatuBeats pode tocar suas músicas e playlists favoritas do YouTube e Spotify diretamente no seu canal de voz.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" alt="Python Version">
+  <img src="https://img.shields.io/badge/discord.py-2.3.2-blue?style=for-the-badge&logo=discord&logoColor=white" alt="discord.py Version">
+  <img src="https://img.shields.io/badge/Docker-Ready-blue?style=for-the-badge&logo=docker" alt="Docker Ready">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
+</p>
 
+**Mestre Tatu** é um assistente completo de RPG para Discord, projetado para enriquecer e agilizar suas campanhas. O que começou como um simples bot de música evoluiu para uma ferramenta poderosa para Mestres e jogadores, combinando utilidades de jogo, um sistema de estatísticas robusto e um gerador de conteúdo com IA.
+
+Construído com `discord.py` e `google-generativeai`, e totalmente containerizado com Docker para uma implantação simples e consistente.
+
+## ✨ Funcionalidades Principais
+
+### 🎲 Ferramentas de RPG e Mestre (IA)
+-   **Mestre de Regras**: Tire dúvidas sobre regras de D&D 5e a qualquer momento com o comando `.rpg`. O bot busca em PDFs locais e usa IA para dar respostas precisas.
+-   **Gerador de NPCs**: Crie NPCs complexos e memoráveis instantaneamente com o comando `.npc`. A IA gera nome, aparência, personalidade e um gancho de aventura.
+-   **Rolador de Dados**: Um sistema completo de rolagem de dados (`.d20`, `.3d6+5`, etc.) com suporte a expressões matemáticas complexas.
+-   **Controle de Iniciativa**: Gerencie a ordem de combate de forma fácil e visual com um painel interativo usando `.init`.
+
+### 📊 Gerenciamento de Campanha
+-   **Registro de Estatísticas**: Grave todos os eventos importantes da sessão — dano, cura, abates, quedas e rolagens críticas — com o comando `.log`.
+-   **Visualização de Dados**: Consulte as estatísticas de um jogador (`.stats`), de uma sessão específica (`.sessionstats`) ou veja o "Hall da Fama" da campanha com os recordistas de cada categoria (`.mvp`).
+-   **Gráficos de Sessão**: Ao final de uma sessão, o bot pode gerar um gráfico visual com o resumo das estatísticas.
+
+### 🎶 Música e Ambiência
 -   **Suporte a Múltiplas Fontes**: Toca músicas e playlists do YouTube, YouTube Music e Spotify.
 -   **Controles Completos**: Comandos para tocar, pausar, pular, parar, gerenciar a fila e muito mais.
 -   **Qualidade de Áudio**: Utiliza `yt-dlp` e `FFmpeg` para streaming de áudio de alta qualidade.
--   **Fácil de Hospedar**: Totalmente containerizado com Docker para uma configuração e implantação simples e consistente.
--   **Seguro**: Gerenciamento de segredos através de um arquivo `.env` para manter suas chaves de API seguras.
--   **Suporte a YouTube Premium**: Pode utilizar um arquivo de cookies para tocar conteúdo exclusivo do YouTube Premium.
 
-Para executar o TatuBeats, você precisará ter o Git e o Docker instalados na sua máquina.
+## 🛠️ Tecnologias Utilizadas
 
-1.  Clone o Repositório
-    Substitua `seu-usuario` pelo seu nome de usuário no GitHub.
+-   **Backend:** Python
+-   **API Discord:** `discord.py`
+-   **IA Generativa:** `google-generativeai`
+-   **Streaming de Áudio:** `yt-dlp`, `FFmpeg`
+-   **Containerização:** `Docker`
+-   **Gerenciamento de Dependências:** `pip`
 
-    ```bash
-    git clone [https://github.com/seu-usuario/TatuBeats.git](https://github.com/seu-usuario/TatuBeats.git)
-    cd TatuBeats
-    ```
-
-2.  Configure o Ambiente
-    Crie um arquivo chamado `.env` na raiz do projeto. Este arquivo guardará todas as suas chaves de API e segredos.
-
-    Copie o conteúdo abaixo para o seu `.env` e preencha com suas credenciais:
-
-    ```env
-    # Token do seu bot Discord
-    DISCORD_TOKEN=SEU_TOKEN_DO_DISCORD
-
-    # ID do cliente e segredo do Spotify (opcional, se quiser suporte ao Spotify)
-    SPOTIPY_CLIENT_ID=SEU_ID_DO_CLIENTE_SPOTIFY
-    SPOTIPY_CLIENT_SECRET=SEU_SEGREDO_DO_CLIENTE_SPOTIFY
-
-    # ID da playlist do YouTube para o comando .ds (opcional)
-    DARK_SOULS_PLAYLIST_ID=ID_DA_PLAYLIST_DARK_SOULS_YOUTUBE
-    ```
-
-3.  (Opcional) Configurar YouTube Premium
-    Para permitir que o bot toque conteúdo exclusivo do YouTube Premium, você pode exportar seus cookies do navegador.
-
-    Use uma extensão como `Get cookies.txt LOCALLY` (Chrome) ou `cookies.txt` (Firefox).
-
-    Navegue até `youtube.com` e exporte os cookies.
-
-    Salve o arquivo baixado como `cookies.txt` na raiz do projeto.
-
-4.  Construa e Execute o Container Docker
-    Com o Docker em execução, use os seguintes comandos no seu terminal:
-
-    ```bash
-    docker build -t tatubeats .
-    docker run -d --name tatubeats -v "$(pwd)/.env:/app/.env:ro" -v "$(pwd)/cookies.txt:/app/cookies.txt:ro" tatubeats
-    ```
-
-    Nota: Se você não estiver usando o `cookies.txt`, pode omitir a parte `-v "$(pwd)/cookies.txt:/app/cookies.txt:ro"` do comando run.
-
-    Seu bot agora deve estar online e pronto para receber comandos!
-
-    Para ver os logs do bot:
-
-    ```bash
-    docker logs -f tatubeats
-    ```
+## 📜 Comandos
 
 O prefixo padrão do bot é `.`
 
-| Comando e Aliases                | Descrição                                                    | Exemplo de Uso                  |
-| -------------------------------- | -------------------------------------------------------------- | ------------------------------- |
-| `.play`, `.p`, `.tocar`          | Toca uma música ou playlist do YouTube/Spotify.                | `.p Never Gonna Give You Up`    |
-| `.join`, `.entrar`               | Faz o bot entrar no seu canal de voz.                          | `.join`                         |
-| `.leave`, `.sair`, `.disconnect` | Faz o bot sair do canal de voz e limpa a fila.                 | `.leave`                        |
-| `.pause`, `.pausar`              | Pausa a música que está tocando.                               | `.pause`                        |
-| `.resume`, `.continuar`          | Retoma a música que estava pausada.                            | `.resume`                       |
-| `.skip`, `.pular`                | Pula para a próxima música da fila.                            | `.skip`                         |
-| `.stop`, `.parar`                | Para a música completamente e limpa a fila.                    | `.stop`                         |
-| `.queue`, `.q`, `.fila`          | Mostra as próximas 10 músicas na fila.                         | `.queue`                        |
-| `.clear`, `.limpar`              | Limpa todas as músicas da fila.                                | `.clear`                        |
-| `.shuffle`, `.misturar`          | Embaralha a ordem das músicas na fila.                         | `.shuffle`                      |
-| `.ds`                            | Toca a playlist temática de Dark Souls (definida no `.env`).   | `.ds`                           |
+### Comandos de RPG
+
+| Comando e Aliases       | Descrição                                                          | Exemplo de Uso                          |
+| ----------------------- | -------------------------------------------------------------------- | --------------------------------------- |
+| `.rpg`                  | Tira uma dúvida de D&D, consultando a IA e os livros locais.         | `.rpg como funciona a ação agarrar`     |
+| `.npc`                  | Gera um NPC completo com base em uma descrição.                      | `.npc um taverneiro anão rabugento`     |
+| `.d`, `.roll`           | Rola dados. Suporta expressões complexas.                          | `.d20+5` ou `.3d8 - 2`                  |
+| `.init`                 | Abre o painel interativo para gerenciar a iniciativa do combate.     | `.init`                                 |
+
+### Comandos de Estatísticas
+
+| Comando e Aliases         | Descrição                                                            | Exemplo de Uso     |
+| ------------------------- | -------------------------------------------------------------------- | ------------------ |
+| `.log`                    | Abre um menu para registrar eventos da sessão (dano, cura, etc.).    | `.log`             |
+| `.stats`, `.estatisticas` | Mostra as estatísticas totais de um jogador específico.              | `.stats @Jogador`  |
+| `.sessionstats`, `.sessao`| Mostra as estatísticas e o gráfico de uma sessão específica.         | `.sessionstats 5`  |
+| `.mvp`, `.destaques`      | Mostra o "Hall da Fama" com os recordistas de cada categoria.        | `.mvp`             |
+| `.setsession`             | (Mestre) Define o número da sessão atual para o registro de logs.    | `.setsession 7`    |
+
+### Comandos de Música
+
+| Comando e Aliases         | Descrição                                             | Exemplo de Uso                    |
+| ------------------------- | ----------------------------------------------------- | --------------------------------- |
+| `.play`, `.p`, `.tocar`   | Toca uma música ou playlist do YouTube/Spotify.       | `.p Never Gonna Give You Up`      |
+| `.join`, `.entrar`        | Faz o bot entrar no seu canal de voz.                 | `.join`                           |
+| `.pause`, `.pausar`       | Pausa a música que está tocando.                      | `.pause`                          |
+| `.resume`, `.continuar`   | Retoma a música que estava pausada.                   | `.resume`                         |
+| `.skip`, `.pular`         | Pula para a próxima música da fila.                   | `.skip`                           |
+| `.stop`, `.parar`         | Para a música completamente e limpa a fila.           | `.stop`                           |
+| `.queue`, `.q`, `.fila`   | Mostra as próximas 10 músicas na fila.                | `.queue`                          |
+| `.clear`, `.limpar`       | Limpa todas as músicas da fila.                       | `.clear`                          |
+| `.shuffle`, `.misturar`   | Embaralha a ordem das músicas na fila.                | `.shuffle`                        |
+
+## 🤝 Contribuições
+
+Contribuições são sempre bem-vindas! Se você tem ideias para novas funcionalidades, melhorias ou encontrou algum bug, sinta-se à vontade para abrir uma *Issue* ou enviar um *Pull Request*.
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.

@@ -1,7 +1,7 @@
-# D:/Codes/TatuBeats/src/main.py
-
-# -*- coding: utf-8 -*-
 import os
+import random
+from asyncio import tasks
+
 import discord
 from discord.ext import commands
 import asyncio
@@ -14,23 +14,17 @@ from flask import Flask
 from waitress import serve
 import google.generativeai as genai
 
-
-# Carrega as variáveis de ambiente do arquivo .env (this is fine for local testing)
 load_dotenv()
 
-# Configura um logger para o bot principal
 log = logging.getLogger(__name__)
 
-# --- LÓGICA DO SERVIDOR WEB (PARA CLOUD RUN) ---
 app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    """Endpoint que o Cloud Run usará para verificar se o contêiner está vivo."""
-    return "TatuBeats health check OK.", 200
+    return "MestreTatu health check OK.", 200
 
 def run_web_server():
-    """Função que será executada na thread secundária."""
     port = int(os.environ.get("PORT", 8080))
     log.info(f"Iniciando servidor web de produção (Waitress) na porta {port}...")
     serve(app, host='0.0.0.0', port=port)
@@ -49,15 +43,12 @@ class TatuBot(commands.Bot):
             else:
                 genai.configure(api_key=gemini_api_key)
 
-                # --- CORREÇÃO: Usando nomes de modelo válidos e estáveis ---
-                # Modelo PRO para tarefas complexas (RPG)
                 self.gemini_pro_model = genai.GenerativeModel(
                     model_name="gemini-2.5-pro",
                     generation_config={"temperature": 0.2}
                 )
                 log.info("Modelo Gemini PRO (gemini-2.5-pro-latest) inicializado com sucesso.")
 
-                # Modelo FLASH para tarefas rápidas (Extração de Keyword)
                 self.gemini_flash_model = genai.GenerativeModel(
                     model_name="gemini-2.5-flash",
                     generation_config={"temperature": 0.0}
@@ -125,7 +116,6 @@ class TatuBot(commands.Bot):
 
 
     async def setup_hook(self):
-        """Chamado quando o bot faz login, para carregar as extensões."""
         log.info("Carregando extensões (cogs)...")
         # --- ALTERAÇÃO AQUI: Adicione 'logging_cog' à lista ---
         cogs_to_load = [
@@ -149,13 +139,7 @@ class TatuBot(commands.Bot):
             except Exception as e:
                 log.error(f'-> FALHA ao carregar o cog {cog_name}.py.', exc_info=True)
 
-    async def on_ready(self):
-        """Evento acionado quando o bot está online e pronto."""
-        log.info('-----------------------------------------')
-        log.info(f'Bot {self.user.name} está online e pronto!')
-        log.info(f'ID do Bot: {self.user.id}')
-        log.info('-----------------------------------------')
-        await self.change_presence(activity=discord.CustomActivity(name="Rolando críticos..."))
+
 
 async def main():
     logging.basicConfig(
@@ -180,13 +164,32 @@ async def main():
 
     bot = TatuBot(command_prefix='.', intents=intents, help_command=None)
 
+    @bot.event
+    async def on_ready():
+        print(f'Logado como {bot.user.name} (ID: {bot.user.id})')
+        print('------')
+        change_status.start()
+
+    status_list = [
+        "Ouvindo as dúvidas dos aventureiros.",
+        "Registrando os feitos da Sessão 7.",
+        "Forjando um novo NPC...",
+        "Organizando a iniciativa do combate.",
+        "Rolando um d20 decisivo..."
+    ]
+
+    @tasks.loop(minutes=15)
+    async def change_status():
+        """Muda o status do bot a cada 15 minutos para refletir suas várias funções."""
+        new_status = random.choice(status_list)
+        await bot.change_presence(activity=discord.Game(name=new_status))
+
     try:
         await bot.start(TOKEN)
     except discord.errors.LoginFailure:
         log.critical("ERRO DE LOGIN: O token do Discord fornecido é inválido.")
     except Exception as e:
         log.critical("Ocorreu um erro fatal ao iniciar o bot.", exc_info=True)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
