@@ -123,10 +123,23 @@ class TatuBot(commands.Bot):
         log.debug(f"Opções do FFmpeg configuradas: {self.ffmpeg_options}")
 
 
+
     async def setup_hook(self):
         """Chamado quando o bot faz login, para carregar as extensões."""
         log.info("Carregando extensões (cogs)...")
-        cogs_to_load = ['message_cog', 'help_cog', 'music_cog', 'rpg_cog', 'stations_cog', 'dice_cog', 'lookup_cog']
+        # --- ALTERAÇÃO AQUI: Adicione 'logging_cog' à lista ---
+        cogs_to_load = [
+            'message_cog',
+            'help_cog',
+            'music_cog',
+            'rpg_cog',
+            'stations_cog',
+            'dice_cog',
+            'lookup_cog',
+            'logging_cog',
+            'session_cog',
+            'initiative_cog'
+        ]
         for cog_name in cogs_to_load:
             try:
                 await self.load_extension(f'cogs.{cog_name}')
@@ -142,7 +155,7 @@ class TatuBot(commands.Bot):
         log.info(f'Bot {self.user.name} está online e pronto!')
         log.info(f'ID do Bot: {self.user.id}')
         log.info('-----------------------------------------')
-        await self.change_presence(activity=discord.CustomActivity(name="Comendo cu de curioso..."))
+        await self.change_presence(activity=discord.CustomActivity(name="Rolando críticos..."))
 
 async def main():
     logging.basicConfig(
@@ -163,6 +176,7 @@ async def main():
     intents.message_content = True
     intents.guilds = True
     intents.voice_states = True
+    intents.members = True
 
     bot = TatuBot(command_prefix='.', intents=intents, help_command=None)
 

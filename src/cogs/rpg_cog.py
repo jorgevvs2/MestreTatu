@@ -11,7 +11,7 @@ import google.generativeai as genai
 # Obtém um logger específico para este módulo.
 log = logging.getLogger(__name__)
 QUERY_TIMEOUT = 60  # Aumentamos um pouco o timeout para acomodar a busca
-RPG_BOOKS_PATH = "rpg_books"  # Caminho para a pasta com os PDFs
+RPG_BOOKS_PATH = "src/rpg_books"  # Caminho para a pasta com os PDFs
 
 
 class RPGCog(commands.Cog, name="Mestre de RPG"):
@@ -152,7 +152,6 @@ class RPGCog(commands.Cog, name="Mestre de RPG"):
             log.error(f"Falha ao extrair keyword da pergunta: '{question}'", exc_info=True)
             return question  # Retorna a pergunta original em caso de erro
 
-    # --- LÓGICA ATUALIZADA DO COMANDO .RPG ---
     @commands.command(name='rpg', help='Tira uma dúvida de D&D com o Mestre Tatu. Uso: .rpg sua pergunta')
     async def rpg_question(self, ctx: commands.Context, *, question: str = None):
         """Recebe uma pergunta de RPG, extrai o termo chave, busca nos PDFs e gera uma resposta contextualizada."""
@@ -219,7 +218,7 @@ class RPGCog(commands.Cog, name="Mestre de RPG"):
                 response_text = response.text
                 embed_title = f"Mestre Tatu responde sobre: {question.title()}"
 
-                # --- CORREÇÃO: TRATAMENTO PARA RESPOSTAS LONGAS ---
+                # --- LÓGICA DE DIVISÃO DE RESPOSTA ATUALIZADA ---
                 if len(response_text) <= 4096:
                     # A resposta cabe em um único embed
                     embed = discord.Embed(
@@ -234,37 +233,34 @@ class RPGCog(commands.Cog, name="Mestre de RPG"):
                     log.warning(
                         f"A resposta da IA excedeu 4096 caracteres ({len(response_text)}). A resposta será dividida.")
 
-                    # Divide o texto em pedaços
-                    chunks = []
-                    remaining_text = response_text
-
-                    # Primeiro pedaço para o embed (limite de 4096)
-                    first_chunk = remaining_text[:4000]  # Deixa uma margem de segurança
-                    chunks.append(first_chunk)
-                    remaining_text = remaining_text[4000:]
-
-                    # Pedaços seguintes para mensagens normais (limite de 2000)
-                    while remaining_text:
-                        chunk = remaining_text[:1990]  # Deixa uma margem de segurança
-                        chunks.append(chunk)
-                        remaining_text = remaining_text[1990:]
+                    # Divide o texto em pedaços de 4000 caracteres para caber na descrição do embed
+                    chunks = [response_text[i:i + 4000] for i in range(0, len(response_text), 4000)]
 
                     # Envia o primeiro embed
-                    embed = discord.Embed(
+                    first_embed = discord.Embed(
                         title=f"{embed_title} (Parte 1 de {len(chunks)})",
                         description=chunks[0] + "\n\n*(Continua...)*",
                         color=discord.Color.from_rgb(114, 137, 218)
                     )
-                    embed.set_footer(text=f"Fonte: {source_text}")
-                    await ctx.reply(embed=embed)
+                    first_embed.set_footer(text=f"Fonte: {source_text}")
+                    await ctx.reply(embed=first_embed)
 
-                    # Envia o resto das partes
+                    # --- ALTERAÇÃO AQUI: Envia o resto das partes como embeds também ---
                     for i, chunk in enumerate(chunks[1:], start=2):
-                        await ctx.send(f"**(Parte {i} de {len(chunks)})**\n{chunk}")
+                        follow_up_embed = discord.Embed(
+                            title=f"{embed_title} (Parte {i} de {len(chunks)})",
+                            description=chunk,
+                            color=discord.Color.from_rgb(114, 137, 218)
+                        )
+                        follow_up_embed.set_footer(text=f"Fonte: {source_text}")
+                        await ctx.send(embed=follow_up_embed)
 
             except asyncio.TimeoutError:
                 await ctx.reply(
                     f"A resposta demorou mais de {QUERY_TIMEOUT} segundos e foi cancelada. Tente novamente.")
+            except Exception as e:
+                log.error(f"Falha ao processar a pergunta de RPG '{question}'.", exc_info=True)
+                await ctx.reply("Desculpe, o Mestre Tatu parece estar meditando e não pôde responder agora.")
             except Exception as e:
                 log.error(f"Falha ao processar a pergunta de RPG '{question}'.", exc_info=True)
                 await ctx.reply("Desculpe, o Mestre Tatu parece estar meditando e não pôde responder agora.")

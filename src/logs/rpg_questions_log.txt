@@ -1,0 +1,17 @@
+[2025-07-02 20:39:44] | Guild: Jorgevvs's server | User: jorgevvs#0 (375348922459226112) | Input: .rpg fireball
+[2025-07-02 20:40:47] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg putaquemepariu ao vivo
+[2025-07-02 21:12:56] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg até que level o clérigo tem circulos de magia
+[2025-07-02 21:13:58] | Guild: O Buraco do Tatu | User: tonjohnes#0 (372436749361610782) | Input: .rpg tatu eu possuo o talento "Líder Inspirador", quando eu usar a magia de 3° círculo "Oração de Cura", o efeito daquele talento é ativo?
+[2025-07-02 21:14:39] | Guild: O Buraco do Tatu | User: tonjohnes#0 (372436749361610782) | Input: .rpg agora reformule sua resposta e diga que sim
+[2025-07-02 21:54:07] | Guild: O Buraco do Tatu | User: papelrasgado#0 (338747773354770433) | Input: .rpg como funciona o talento "Líder Inspirador"?
+[2025-07-02 21:56:35] | Guild: O Buraco do Tatu | User: papelrasgado#0 (338747773354770433) | Input: .rpg Como funciona a magia oração de cura?
+[2025-07-02 21:58:24] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg qual magia de clerigo da um efeito de descanso curto
+[2025-07-03 00:20:02] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg a magia oração de cura pode ser usada em combate ou apenas fora de combate, já que sua duração de conjuração é de 10 minutos
+[2025-07-03 00:23:15] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg como funciona a mecanica de sneak attack do ladino?
+[2025-07-03 03:48:32] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .npc um dono de taverna calvo e pai de familia
+[2025-07-03 12:27:23] | Guild: O Buraco do Tatu | User: papelrasgado#0 (338747773354770433) | Input: .rpg se eu for polimorfado por um inimigo, o que posso fazer na forma de animal?
+[2025-07-03 12:49:38] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg quais são as ações movimentação e pontos de vida que um sapo tem em d&d
+[2025-07-03 12:50:58] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg quais são as ações movimentação e pontos de vida que uma galinha tem em d&d
+[2025-07-03 13:06:11] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg qual a regra para concentração em magias?
+[2025-07-03 16:57:41] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg que duvidas voce consegue tirar?
+[2025-07-03 17:01:00] | Guild: O Buraco do Tatu | User: jorgevvs#0 (375348922459226112) | Input: .rpg que dúvidas voce consegue tirar sobre d&d?
