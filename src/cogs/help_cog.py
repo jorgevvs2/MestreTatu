@@ -16,7 +16,7 @@ class HelpCog(commands.Cog, name="Ajuda"):
 
         if command_name is None:
             embed = discord.Embed(
-                title="❓ Ajuda - Comandos do TatuBeats",
+                title="❓ Ajuda - Comandos do MestreTatu",
                 description="Aqui estão todos os comandos disponíveis, organizados por categoria. "
                             "Use `.help <comando>` para obter mais detalhes sobre um comando específico.",
                 color=discord.Color.purple()

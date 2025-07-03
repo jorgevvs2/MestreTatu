@@ -1,6 +1,3 @@
-# D:/Codes/TatuBeats/src/cogs/music_cog.py
-
-import os
 import discord
 from discord.ext import commands
 import yt_dlp

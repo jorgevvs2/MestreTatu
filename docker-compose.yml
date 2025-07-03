@@ -1,5 +1,5 @@
 # docker-compose.yml
-# Orquestra o ambiente de desenvolvimento local do TatuBeats.
+# Orquestra o ambiente de desenvolvimento local do MestreTatu.
 
 version: '3.8'
 
@@ -8,7 +8,7 @@ services:
     # Constrói a imagem a partir do Dockerfile no diretório atual.
     build: .
     # Renomeia o contêiner para algo amigável no Docker Desktop.
-    container_name: tatubeats_bot
+    container_name: mestretatu_bot
     # Reinicia o contêiner automaticamente se ele parar por algum erro.
     restart: unless-stopped
 

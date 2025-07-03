@@ -1,5 +1,3 @@
-# D:/Codes/TatuBeats/src/cogs/stations_cog.py
-
 import os
 import discord
 from discord.ext import commands
@@ -9,31 +7,21 @@ import asyncio
 log = logging.getLogger(__name__)
 
 class StationsCog(commands.Cog, name="Estações"):
-    """
-    Um cog dedicado para tocar playlists pré-definidas (estações de rádio)
-    com comandos de atalho.
-    """
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         log.info("StationsCog (Estações de Rádio) inicializado.")
 
     async def _play_station(self, ctx: commands.Context, station_env_var: str, station_name: str):
-        """
-        Função helper para tocar uma estação. Evita repetição de código.
-        """
-        # 1. Pega a MusicCog para usar suas funcionalidades
         music_cog = self.bot.get_cog('Música')
         if not music_cog:
             await ctx.reply("O módulo de música parece estar desativado. Não consigo tocar a estação.")
             return
 
-        # 2. Garante que o usuário está em um canal de voz
         if not ctx.author.voice:
             await ctx.reply("Você precisa estar em um canal de voz para iniciar uma estação!")
             return
 
-        # 3. Pega a URL da playlist do ambiente
         playlist_url = os.getenv(station_env_var)
         if not playlist_url:
             log.error(f"A variável de ambiente '{station_env_var}' não foi encontrada!")
@@ -43,14 +31,11 @@ class StationsCog(commands.Cog, name="Estações"):
         log.info(f"[{ctx.guild.id}] Trocando para a estação: '{station_name}'")
         await ctx.reply(f"Sintonizando na estação **{station_name}**! Limpando a fila e iniciando a playlist...")
 
-        # 4. Invoca o comando 'stop' da MusicCog para limpar a fila e parar a música atual.
         stop_command = self.bot.get_command('stop')
         await ctx.invoke(stop_command)
 
-        # 5. Pequena espera para garantir que o estado do bot foi limpo.
         await asyncio.sleep(1.5)
 
-        # 6. Invoca o comando 'play' da MusicCog com a URL da playlist da estação.
         play_command = self.bot.get_command('play')
         await ctx.invoke(play_command, search=playlist_url)
 
@@ -72,5 +57,4 @@ class StationsCog(commands.Cog, name="Estações"):
 
 
 async def setup(bot: commands.Bot):
-    """Função que o discord.py chama para carregar a cog."""
     await bot.add_cog(StationsCog(bot))
