@@ -137,7 +137,8 @@ class TatuBot(commands.Bot):
             'dice_cog',
             'lookup_cog',
             'logging_cog',
-            'session_cog'
+            'session_cog',
+            'initiative_cog'
         ]
         for cog_name in cogs_to_load:
             try:
