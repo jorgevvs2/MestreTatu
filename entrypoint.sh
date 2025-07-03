@@ -8,5 +8,5 @@
 # "$@" passes all arguments from the Docker CMD to this script.
 # In our case, it will pass "python", "src/main.py".
 
-echo "Starting TatuBeats with higher CPU priority..."
+echo "Starting MestreTatu with higher CPU priority..."
 exec nice -n -10 "$@"
