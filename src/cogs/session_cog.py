@@ -1,31 +1,27 @@
 import discord
 from discord.ext import commands
 import asyncio
-import logging  # <-- CORREÇÃO: Importar a biblioteca de logging
+import logging
 import os
 import sqlite3
 import json
 from datetime import datetime
 from collections import defaultdict
 
-# --- CORREÇÃO: Inicializar o logger para este arquivo ---
 log = logging.getLogger(__name__)
 
 # --- Constantes de Configuração ---
 PLAYER_ROLE_NAME = "Aventureiro"
 
-# A variável LOGS_DIR não era usada, então foi removida para limpeza.
-DATA_DIR = os.getenv("DATA_DIR", "src/logs")
-DB_FILE = os.path.join(DATA_DIR, "stats.db")
-SESSION_DATA_FILE = os.path.join(DATA_DIR, "session_data.json")
+# --- CORREÇÃO: Caminho absoluto e correto para o volume persistente ---
+# Todos os dados persistentes devem estar no diretório /data
+DB_FILE = '/data/stats.db'
+SESSION_DATA_FILE = '/data/session_data.json'
 
 
 def setup_database():
-    """Garante que o diretório de dados e o banco de dados existam."""
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
-        log.info(f"Diretório de dados '{DATA_DIR}' criado.")
-
+    """Garante que o banco de dados exista no caminho correto."""
+    # O diretório /data é criado e montado pela Fly.io, não precisamos criá-lo.
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -43,15 +39,9 @@ def setup_database():
         ''')
         conn.commit()
         conn.close()
-        # Agora a variável 'log' existe e esta linha funcionará.
         log.info(f"Banco de dados '{DB_FILE}' verificado/criado com sucesso.")
     except Exception as e:
-        # E esta também.
-        log.error(f"Falha ao inicializar o banco de dados: {e}", exc_info=True)
-
-# ... (o resto do arquivo permanece exatamente o mesmo) ...
-# O restante do seu código em session_cog.py está correto e não precisa de alterações.
-# Apenas a adição do import e da inicialização do logger no topo do arquivo é necessária.
+        log.error(f"Falha ao inicializar o banco de dados em '{DB_FILE}': {e}", exc_info=True)
 
 # --- VIEWS (Lógica de UI) ---
 # As Views foram adaptadas para chamar os métodos do COG que agora usam o banco de dados.

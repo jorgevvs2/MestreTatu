@@ -13,8 +13,8 @@ class AdminCog(commands.Cog, name="Administração"):
 
     def __init__(self, bot):
         self.bot = bot
-        # O caminho para o banco de dados no volume montado pelo Docker/Fly.io
-        self.db_path = 'data/stats.db'
+        # --- CORREÇÃO: Usar o caminho absoluto para o volume ---
+        self.db_path = '/data/stats.db'
 
     @commands.command(name='sessionlogs', help='Lista todos os logs de uma sessão específica. (Dono do bot)')
     @commands.is_owner()
