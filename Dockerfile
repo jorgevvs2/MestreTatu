@@ -11,7 +11,7 @@ WORKDIR /app
 # O -y confirma automaticamente, e a limpeza no final reduz o tamanho da imagem.
 RUN apt-get update && \
     apt-get install -y wget && \
-    rm -rf /var/lib/apt/lists/* \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy all project files from the current directory on the host
 # to the /app directory in the container.
