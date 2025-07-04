@@ -3,8 +3,6 @@ import random
 import discord
 from discord.ext import commands, tasks # <-- CORREÇÃO: Importado de discord.ext
 import asyncio
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
 from dotenv import load_dotenv
 import logging
 from threading import Thread
@@ -68,44 +66,6 @@ class TatuBot(commands.Bot):
             log.error("Falha ao inicializar os modelos Gemini.", exc_info=True)
             self.gemini_pro_model = None
             self.gemini_flash_model = None
-
-        # Inicialização do Spotify
-        try:
-            spotify_id = os.getenv('SPOTIFY_CLIENT_ID')
-            spotify_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
-            if not spotify_id or not spotify_secret:
-                log.warning("Credenciais do Spotify não encontradas. Playlists do Spotify serão desativadas.")
-                self.spotify_client = None
-            else:
-                self.spotify_client = spotipy.Spotify(
-                    auth_manager=SpotifyClientCredentials(client_id=spotify_id, client_secret=spotify_secret)
-                )
-                self.spotify_client.search(q='test', type='track', limit=1)
-                log.info("Cliente Spotify inicializado e autenticado com sucesso.")
-        except Exception:
-            self.spotify_client = None
-            log.error("Erro ao inicializar o cliente Spotify. Verifique as credenciais.", exc_info=True)
-
-        # Configurações do yt-dlp e FFmpeg
-        self.ydl_options = {
-            'format': 'bestaudio/best', 'noplaylist': False, 'quiet': True,
-            'default_search': 'auto', 'source_address': '0.0.0.0', 'ignoreerrors': True,
-            'force_ipv4': True, 'extractor_retries': 3,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'
-            }
-        }
-        cookie_file_path = 'cookies.txt'
-        if os.path.exists(cookie_file_path):
-            log.info("Arquivo de cookies encontrado. Usando para autenticação.")
-            self.ydl_options['cookiefile'] = cookie_file_path
-        else:
-            log.info(f"Arquivo de cookies '{cookie_file_path}' não encontrado.")
-
-        self.ffmpeg_options = {
-            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1 -reconnect_on_http_error 4xx,5xx -reconnect_delay_max 15',
-            'options': '-vn -loglevel warning -nostats',
-        }
 
     async def setup_hook(self):
         """Hook executado para carregar as extensões (cogs) antes do bot conectar."""

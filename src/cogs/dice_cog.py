@@ -5,7 +5,7 @@ import re
 from typing import Dict, Any
 
 
-class DiceCog(commands.Cog, name="Ferramentas de RPG"):
+class DiceCog(commands.Cog, name="Rolador de Dados"):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
