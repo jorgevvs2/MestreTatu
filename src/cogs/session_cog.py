@@ -13,38 +13,42 @@ log = logging.getLogger(__name__)
 # --- Constantes de Configuração ---
 PLAYER_ROLE_NAME = "Aventureiro"
 
-# --- CORREÇÃO: Caminho absoluto e correto para o volume persistente ---
-# Todos os dados persistentes devem estar no diretório /data
+# --- Caminhos para Arquivos Persistentes ---
 DB_FILE = '/data/stats.db'
 SESSION_DATA_FILE = '/data/session_data.json'
 
-
 def setup_database():
-    """Garante que o banco de dados exista no caminho correto."""
-    # O diretório /data é criado e montado pela Fly.io, não precisamos criá-lo.
+    """Garante que as tabelas do banco de dados existam no caminho correto."""
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        # Cria a tabela se ela não existir
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS session_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                guild_id TEXT NOT NULL,
-                session_number INTEGER NOT NULL,
-                player_name TEXT NOT NULL,
-                action TEXT NOT NULL,
-                amount INTEGER NOT NULL
-            )
-        ''')
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS session_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    guild_id TEXT NOT NULL,
+                    session_number INTEGER NOT NULL,
+                    player_name TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    amount INTEGER NOT NULL
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id TEXT NOT NULL,
+                    session_number INTEGER NOT NULL,
+                    title TEXT,
+                    description TEXT,
+                    end_timestamp TEXT NOT NULL,
+                    UNIQUE(guild_id, session_number)
+                )
+            ''')
         log.info(f"Banco de dados '{DB_FILE}' verificado/criado com sucesso.")
     except Exception as e:
         log.error(f"Falha ao inicializar o banco de dados em '{DB_FILE}': {e}", exc_info=True)
 
 # --- VIEWS (Lógica de UI) ---
-# As Views foram adaptadas para chamar os métodos do COG que agora usam o banco de dados.
 
 class StatsSelectorView(discord.ui.View):
     """Uma View para selecionar um jogador e mostrar suas estatísticas totais."""
@@ -85,7 +89,6 @@ class StatsSelectorView(discord.ui.View):
             await interaction.followup.send("Jogador não encontrado.", ephemeral=True)
             return
 
-        # <-- NOVA LÓGICA: Busca os dados do banco
         stats = self.cog._get_player_total_stats(interaction.guild.id, player.display_name)
 
         embed = discord.Embed(title=f"Estatísticas Totais de {player.display_name}", color=player.color)
@@ -102,7 +105,7 @@ class StatsSelectorView(discord.ui.View):
 
 
 class SessionStatsSelectorView(discord.ui.View):
-    """Uma View para selecionar uma SESSÃO e mostrar suas estatísticas."""
+    """Uma View para selecionar uma sessão e mostrar seus detalhes."""
 
     def __init__(self, author: discord.Member, cog_instance):
         super().__init__(timeout=180)
@@ -110,12 +113,11 @@ class SessionStatsSelectorView(discord.ui.View):
         self.cog = cog_instance
         self.message = None
 
-        # <-- NOVA LÓGICA: Busca as sessões do banco
         sessions = self.cog._get_available_sessions(author.guild.id)
         if not sessions:
             return
 
-        options = [discord.SelectOption(label=f"Sessão {s}", value=str(s)) for s in sorted(sessions, reverse=True)]
+        options = [discord.SelectOption(label=f"Sessão {s_num}", value=str(s_num)) for s_num in sessions]
         session_select_menu = discord.ui.Select(placeholder="Selecione uma sessão...", options=options)
         session_select_menu.callback = self.session_select_callback
         self.add_item(session_select_menu)
@@ -136,29 +138,29 @@ class SessionStatsSelectorView(discord.ui.View):
         await interaction.response.defer()
         selected_session = int(self.children[0].values[0])
 
-        # <-- NOVA LÓGICA: Busca os dados da sessão do banco
+        session_info = self.cog._get_session_info(interaction.guild.id, selected_session)
         session_stats = self.cog._get_session_stats(interaction.guild.id, selected_session)
 
-        embed = discord.Embed(title=f"Resumo da Sessão {selected_session}", color=discord.Color.purple())
+        embed_title = session_info.get('title', f"Resumo da Sessão {selected_session}")
+        embed_description = session_info.get('description', "Nenhum resumo adicionado para esta sessão.")
+
+        embed = discord.Embed(title=f"📜 {embed_title}", description=embed_description, color=discord.Color.purple())
+
         if not session_stats:
-            embed.description = "Nenhum dado encontrado para esta sessão."
-            await interaction.edit_original_response(embed=embed, view=None)
-            return
+            embed.add_field(name="Estatísticas", value="Nenhuma atividade registrada para esta sessão.")
+        else:
+            summary_text = ""
+            action_names = {
+                "causado": "Dano Causado", "recebido": "Dano Recebido", "cura": "Cura",
+                "eliminacao": "Abates", "jogador_caido": "Quedas",
+                "critico_sucesso": "Críticos (20)", "critico_falha": "Falhas (1)"
+            }
+            for player, stats in sorted(session_stats.items()):
+                summary_text += f"\n**{player}**\n"
+                player_lines = [f"• {friendly_name}: `{stats[action]}`" for action, friendly_name in action_names.items() if stats.get(action, 0) > 0]
+                summary_text += "\n".join(player_lines) if player_lines else "Nenhuma atividade registrada."
+            embed.add_field(name="Estatísticas da Sessão", value=summary_text, inline=False)
 
-        summary_text = ""
-        action_names = {
-            "causado": "Dano Causado", "recebido": "Dano Recebido", "cura": "Cura",
-            "eliminacao": "Abates", "jogador_caido": "Quedas",
-            "critico_sucesso": "Críticos (20)", "critico_falha": "Falhas (1)"
-        }
-
-        for player, stats in sorted(session_stats.items()):
-            summary_text += f"**{player}**\n"
-            player_lines = [f"• {friendly_name}: `{stats[action]}`" for action, friendly_name in action_names.items() if
-                            stats.get(action, 0) > 0]
-            summary_text += "\n".join(player_lines) + "\n\n" if player_lines else "Nenhuma atividade registrada.\n\n"
-
-        embed.description = summary_text
         await interaction.edit_original_response(embed=embed, view=None)
 
 
@@ -336,14 +338,12 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
         session_number = self.session_data.get(str(guild_id), 1)
 
         try:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO session_stats (timestamp, guild_id, session_number, player_name, action, amount) VALUES (?, ?, ?, ?, ?, ?)",
-                (timestamp, str(guild_id), session_number, player.display_name, action, amount)
-            )
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO session_stats (timestamp, guild_id, session_number, player_name, action, amount) VALUES (?, ?, ?, ?, ?, ?)",
+                    (timestamp, str(guild_id), session_number, player.display_name, action, amount)
+                )
             log.info(f"Estatística registrada para {player.display_name}: {action} - {amount}")
         except Exception as e:
             log.error(f"Falha ao escrever no banco de dados: {e}", exc_info=True)
@@ -352,15 +352,14 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
         """Busca as estatísticas totais de um jogador no banco de dados."""
         stats = defaultdict(int)
         try:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT action, SUM(amount) FROM session_stats WHERE guild_id = ? AND player_name = ? GROUP BY action",
-                (str(guild_id), player_name)
-            )
-            for action, total_amount in cursor.fetchall():
-                stats[action] = total_amount
-            conn.close()
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT action, SUM(amount) FROM session_stats WHERE guild_id = ? AND player_name = ? GROUP BY action",
+                    (str(guild_id), player_name)
+                )
+                for action, total_amount in cursor.fetchall():
+                    stats[action] = total_amount
         except Exception as e:
             log.error(f"Erro ao buscar estatísticas de {player_name}: {e}", exc_info=True)
         return stats
@@ -369,11 +368,10 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
         """Retorna uma lista de números de sessão únicos do banco de dados."""
         sessions = []
         try:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute("SELECT DISTINCT session_number FROM session_stats WHERE guild_id = ?", (str(guild_id),))
-            sessions = [row[0] for row in cursor.fetchall()]
-            conn.close()
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT DISTINCT session_number FROM session_stats WHERE guild_id = ? ORDER BY session_number DESC", (str(guild_id),))
+                sessions = [row[0] for row in cursor.fetchall()]
         except Exception as e:
             log.error(f"Erro ao buscar sessões disponíveis: {e}", exc_info=True)
         return sessions
@@ -382,18 +380,35 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
         """Busca as estatísticas de uma sessão específica do banco de dados."""
         session_stats = defaultdict(lambda: defaultdict(int))
         try:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT player_name, action, SUM(amount) FROM session_stats WHERE guild_id = ? AND session_number = ? GROUP BY player_name, action",
-                (str(guild_id), session_number)
-            )
-            for player_name, action, total_amount in cursor.fetchall():
-                session_stats[player_name][action] = total_amount
-            conn.close()
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT player_name, action, SUM(amount) FROM session_stats WHERE guild_id = ? AND session_number = ? GROUP BY player_name, action",
+                    (str(guild_id), session_number)
+                )
+                for player_name, action, total_amount in cursor.fetchall():
+                    session_stats[player_name][action] = total_amount
         except Exception as e:
             log.error(f"Erro ao buscar estatísticas da sessão {session_number}: {e}", exc_info=True)
         return session_stats
+
+    def _get_session_info(self, guild_id: int, session_number: int) -> dict:
+        """Busca o título e a descrição de uma sessão específica."""
+        info = {}
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT title, description FROM sessions WHERE guild_id = ? AND session_number = ?",
+                    (str(guild_id), session_number)
+                )
+                row = cursor.fetchone()
+                if row:
+                    info = dict(row)
+        except Exception as e:
+            log.error(f"Erro ao buscar informações da sessão {session_number}: {e}", exc_info=True)
+        return info
 
     def _get_players(self, guild: discord.Guild) -> list[discord.Member]:
         """Helper para pegar membros com o cargo de jogador."""
@@ -480,9 +495,6 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
         """Compila estatísticas do banco de dados e mostra os recordistas."""
         async with ctx.typing():
             try:
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-
                 action_map = {
                     "causado": ("⚔️ Mão Pesada", "Maior Dano Causado"),
                     "recebido": ("🛡️ Muralha de Carne", "Maior Dano Recebido"),
@@ -500,26 +512,32 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
                 )
 
                 found_any_mvp = False
-                for action, (title, desc) in action_map.items():
-                    cursor.execute("""
-                        SELECT player_name, SUM(amount) as total
-                        FROM session_stats
-                        WHERE guild_id = ? AND action = ?
-                        GROUP BY player_name
-                        ORDER BY total DESC
-                        LIMIT 1
-                    """, (str(ctx.guild.id), action))
+                with sqlite3.connect(DB_FILE) as conn:
+                    cursor = conn.cursor()
+                    for action, (title, desc) in action_map.items():
+                        cursor.execute("""
+                                       SELECT player_name, SUM(amount) as total
+                                       FROM session_stats
+                                       WHERE guild_id = ? AND action = ?
+                                       GROUP BY player_name
+                                       ORDER BY total DESC
+                                       """, (str(ctx.guild.id), action))
+                        results = cursor.fetchall()
 
-                    result = cursor.fetchone()
-                    if result and result[1] > 0:
-                        player, value = result
-                        embed.add_field(name=title, value=f"**{player}** com um total de `{value}`\n*({desc})*",
-                                        inline=False)
+                        if not results or results[0][1] <= 0:
+                            embed.add_field(name=title, value=f"Ninguém se destacou ainda.\n*({desc})*", inline=False)
+                            continue
+
+                        top_score = results[0][1]
+                        mvps = [row[0] for row in results if row[1] == top_score]
+                        player_names = ", ".join(f"**{name}**" for name in mvps)
+
+                        embed.add_field(
+                            name=title,
+                            value=f"{player_names} com um total de `{top_score}`\n*({desc})*",
+                            inline=False
+                        )
                         found_any_mvp = True
-                    else:
-                        embed.add_field(name=title, value=f"Ninguém se destacou ainda.\n*({desc})*", inline=False)
-
-                conn.close()
 
                 if not found_any_mvp:
                     await ctx.reply("Ainda não há dados suficientes neste servidor para determinar os MVPs.")
@@ -532,6 +550,47 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
                 log.error(f"Erro ao gerar MVPs: {e}", exc_info=True)
                 await ctx.reply("Ocorreu um erro ao consultar o Hall da Fama.")
 
+
+    @commands.command(name='endsession', help='Finaliza a sessão atual com um título e descrição.')
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    async def end_session(self, ctx: commands.Context, title: str, *, description: str):
+        """
+        Salva um resumo da sessão atual no banco de dados.
+        Use aspas para títulos com espaços. Ex: .endsession "O Resgate do Ferreiro" O grupo...
+        """
+        guild_id = str(ctx.guild.id)
+        session_number = self.session_data.get(guild_id)
+
+        if session_number is None:
+            await ctx.reply("Não há uma sessão ativa para finalizar. Use `.setsession` para iniciar uma.")
+            return
+
+        timestamp = datetime.utcnow().isoformat()
+
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+
+            # INSERT OR REPLACE atualiza a entrada se ela já existir, útil para correções.
+            cursor.execute("""
+                    INSERT OR REPLACE INTO sessions (guild_id, session_number, title, description, end_timestamp)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (guild_id, session_number, title, description, timestamp))
+
+            conn.commit()
+            conn.close()
+
+            embed = discord.Embed(
+                title=f"✅ Sessão {session_number} Finalizada com Sucesso!",
+                description=f"**Título:** {title}\n\n**Resumo:** {description}",
+                color=discord.Color.green()
+            )
+            await ctx.reply(embed=embed)
+
+        except Exception as e:
+            log.error(f"Erro ao finalizar a sessão {session_number}: {e}", exc_info=True)
+            await ctx.reply("Ocorreu um erro ao tentar salvar o resumo da sessão.")
 
 async def setup(bot: commands.Bot):
     """Função que o discord.py chama para carregar a cog."""
