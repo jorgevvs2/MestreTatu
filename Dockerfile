@@ -1,33 +1,21 @@
-# --- Estágio 1: Builder ---
-# Usamos uma imagem completa para ter as ferramentas de build necessárias para o pip.
-FROM python:3.10 as builder
+# Dockerfile
 
-# Define o diretório de trabalho
-WORKDIR /app
-
-# Instala as dependências primeiro para aproveitar o cache do Docker
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix="/install" -r requirements.txt
-
-# Copia o resto do código da aplicação
-COPY src/ ./src/
-
-
-# --- Estágio 2: Final ---
-# Usamos a imagem 'slim' que é muito menor, pois não precisamos mais das ferramentas de build.
+# Use an official Python runtime as a parent image
 FROM python:3.10-slim
 
-# Define o diretório de trabalho
+# Set the working directory in the container
 WORKDIR /app
 
-# Copia apenas as dependências já instaladas do estágio 'builder'
-COPY --from=builder /install /usr/local
+# Copy the requirements file into the container at /app
+COPY requirements.txt .
 
-# Copia apenas o código-fonte necessário do estágio 'builder'
-COPY --from=builder /app/src ./src
+# Install any needed packages specified in requirements.txt
+# --no-cache-dir makes the image smaller
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Expõe a porta para o health check
-EXPOSE 8080
+# Copy the rest of the application's code into the container at /app
+# This will copy the entire 'src' directory, including 'rpg_books'
+COPY src/ ./src/
 
-# Define o comando para rodar a aplicação
+# Command to run the application
 CMD ["python", "src/main.py"]
