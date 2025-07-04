@@ -54,15 +54,15 @@ class TatuBot(commands.Bot):
                 genai.configure(api_key=gemini_api_key)
                 # Usando nomes de modelo válidos e consistentes.
                 self.gemini_pro_model = genai.GenerativeModel(
-                    model_name="gemini-1.5-pro-latest",
+                    model_name="gemini-2.5-pro",
                     generation_config={"temperature": 0.2}
                 )
-                log.info("Modelo Gemini PRO (gemini-1.5-pro-latest) inicializado com sucesso.")
+                log.info("Modelo Gemini PRO (gemini-2.5-pro) inicializado com sucesso.")
                 self.gemini_flash_model = genai.GenerativeModel(
-                    model_name="gemini-1.5-flash-latest",
+                    model_name="gemini-2.5-flash",
                     generation_config={"temperature": 0.0}
                 )
-                log.info("Modelo Gemini FLASH (gemini-1.5-flash-latest) inicializado com sucesso.")
+                log.info("Modelo Gemini FLASH (gemini-2.5-flash) inicializado com sucesso.")
         except Exception:
             log.error("Falha ao inicializar os modelos Gemini.", exc_info=True)
             self.gemini_pro_model = None
