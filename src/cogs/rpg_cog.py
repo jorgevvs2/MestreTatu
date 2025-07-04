@@ -26,7 +26,7 @@ class RPGCog(commands.Cog, name="Mestre de RPG"):
             try:
                 creative_config = genai.types.GenerationConfig(temperature=0.9)
                 self.npc_model = genai.GenerativeModel(
-                    model_name="gemini-1.5-pro-latest",
+                    model_name="gemini-2.5-pro",
                     generation_config=creative_config
                 )
                 log.info("RPGCog: Modelo Gemini para NPCs (criativo) inicializado com sucesso.")
