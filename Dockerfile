@@ -1,22 +1,26 @@
 # Dockerfile
 
-# Use an official Python runtime as a parent image
+# Use an official, slim Python image as the base
 FROM python:3.10-slim
 
-# Set the working directory in the container
+# Set the working directory inside the container to /app
 WORKDIR /app
 
-# Copy the requirements file into the container at /app
-COPY requirements.txt .
+# Copy all project files from the current directory on the host
+# to the /app directory in the container.
+# This is the most robust way to ensure start.sh, requirements.txt,
+# and the src/ folder are all included.
+COPY . .
 
-# Install any needed packages specified in requirements.txt
-# --no-cache-dir makes the image smaller
+# Install the Python dependencies from requirements.txt
+# The --no-cache-dir flag makes the final image smaller
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application's code into the container at /app
-# This will copy the entire 'src' directory, including 'rpg_books'
-COPY src/ ./src/
+# Make sure the start script is executable inside the container.
+# This is a more reliable method than relying on Git permissions,
+# as it happens during the image build itself.
+RUN chmod +x ./start.sh
 
-# Command to run the application
-CMD ["python", "src/main.py"]
+# Command to run when the container launches.
+# There should only be ONE CMD instruction.
 CMD ["./start.sh"]
