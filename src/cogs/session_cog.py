@@ -59,14 +59,24 @@ class StatsSelectorView(discord.ui.View):
         self.cog = cog_instance
         self.message = None
 
-        players = self.cog._get_players(author.guild)
-        if not players:
+        sessions_data = self.cog._get_available_sessions(author.guild.id)
+        if not sessions_data:
             return
 
-        options = [discord.SelectOption(label=player.display_name, value=str(player.id)) for player in players]
-        player_select_menu = discord.ui.Select(placeholder="Selecione um jogador...", options=options)
-        player_select_menu.callback = self.player_select_callback
-        self.add_item(player_select_menu)
+        options = []
+        for s_num, title in sessions_data:
+            # Formata o rótulo para incluir o título, se disponível.
+            label = f"Sessão {s_num}"
+            if title:
+                # Limita o tamanho do título para não exceder o limite do Discord.
+                truncated_title = (title[:80] + '...') if len(title) > 80 else title
+                label += f": {truncated_title}"
+
+            options.append(discord.SelectOption(label=label, value=str(s_num)))
+
+        session_select_menu = discord.ui.Select(placeholder="Selecione uma sessão...", options=options)
+        session_select_menu.callback = self.session_select_callback
+        self.add_item(session_select_menu)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author.id:
@@ -141,10 +151,16 @@ class SessionStatsSelectorView(discord.ui.View):
         session_info = self.cog._get_session_info(interaction.guild.id, selected_session)
         session_stats = self.cog._get_session_stats(interaction.guild.id, selected_session)
 
-        embed_title = session_info.get('title', f"Resumo da Sessão {selected_session}")
-        embed_description = session_info.get('description', "Nenhum resumo adicionado para esta sessão.")
+        title = session_info.get('title')
+        description = session_info.get('description', "Nenhum resumo adicionado para esta sessão.")
 
-        embed = discord.Embed(title=f"📜 {embed_title}", description=embed_description, color=discord.Color.purple())
+        # Garante que o número da sessão esteja sempre visível no título do embed.
+        if title:
+            embed_title = f"📜 Sessão {selected_session}: {title}"
+        else:
+            embed_title = f"📜 Resumo da Sessão {selected_session}"
+
+        embed = discord.Embed(title=embed_title, description=description, color=discord.Color.purple())
 
         if not session_stats:
             embed.add_field(name="Estatísticas", value="Nenhuma atividade registrada para esta sessão.")
@@ -157,7 +173,8 @@ class SessionStatsSelectorView(discord.ui.View):
             }
             for player, stats in sorted(session_stats.items()):
                 summary_text += f"\n**{player}**\n"
-                player_lines = [f"• {friendly_name}: `{stats[action]}`" for action, friendly_name in action_names.items() if stats.get(action, 0) > 0]
+                player_lines = [f"• {friendly_name}: `{stats[action]}`" for action, friendly_name in
+                                action_names.items() if stats.get(action, 0) > 0]
                 summary_text += "\n".join(player_lines) if player_lines else "Nenhuma atividade registrada."
             embed.add_field(name="Estatísticas da Sessão", value=summary_text, inline=False)
 
@@ -364,17 +381,26 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
             log.error(f"Erro ao buscar estatísticas de {player_name}: {e}", exc_info=True)
         return stats
 
-    def _get_available_sessions(self, guild_id: int) -> list[int]:
-        """Retorna uma lista de números de sessão únicos do banco de dados."""
-        sessions = []
+    def _get_available_sessions(self, guild_id: int) -> list[tuple[int, str | None]]:
+        """Retorna uma lista de tuplas (número_da_sessão, título) do banco de dados."""
+        sessions_data = []
         try:
             with sqlite3.connect(DB_FILE) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT DISTINCT session_number FROM session_stats WHERE guild_id = ? ORDER BY session_number DESC", (str(guild_id),))
-                sessions = [row[0] for row in cursor.fetchall()]
+                # Usamos LEFT JOIN para garantir que todas as sessões com logs apareçam,
+                # mesmo que não tenham um título/descrição na tabela 'sessions'.
+                cursor.execute("""
+                               SELECT DISTINCT s.session_number, ses.title
+                               FROM session_stats s
+                                        LEFT JOIN sessions ses
+                                                  ON s.guild_id = ses.guild_id AND s.session_number = ses.session_number
+                               WHERE s.guild_id = ?
+                               ORDER BY s.session_number DESC
+                               """, (str(guild_id),))
+                sessions_data = cursor.fetchall()
         except Exception as e:
             log.error(f"Erro ao buscar sessões disponíveis: {e}", exc_info=True)
-        return sessions
+        return sessions_data
 
     def _get_session_stats(self, guild_id: int, session_number: int) -> defaultdict:
         """Busca as estatísticas de uma sessão específica do banco de dados."""
