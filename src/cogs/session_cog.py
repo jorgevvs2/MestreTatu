@@ -10,18 +10,19 @@ from collections import defaultdict
 
 # --- Constantes de Configuração ---
 PLAYER_ROLE_NAME = "Aventureiro"
-LOGS_DIR = "src/logs"
-DB_FILE = os.path.join(LOGS_DIR, "stats.db")
-SESSION_DATA_FILE = os.path.join(LOGS_DIR, "session_data.json")
 
-log = logging.getLogger(__name__)
+LOGS_DIR = "src/logs"
+DATA_DIR = os.getenv("DATA_DIR", "src/logs")
+DB_FILE = os.path.join(DATA_DIR, "stats.db")
+
+SESSION_DATA_FILE = os.path.join(DATA_DIR, "session_data.json")
 
 
 def setup_database():
     """Garante que o diretório de logs e o banco de dados existam."""
-    if not os.path.exists(LOGS_DIR):
-        os.makedirs(LOGS_DIR)
-        log.info(f"Diretório de logs '{LOGS_DIR}' criado.")
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+        log.info(f"Diretório de dados '{DATA_DIR}' criado.")
 
     try:
         conn = sqlite3.connect(DB_FILE)
