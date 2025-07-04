@@ -3,74 +3,72 @@ from discord.ext import commands
 import asyncio
 import logging
 import os
-import csv
+import sqlite3
 import json
 from datetime import datetime
 from collections import defaultdict
 
-# Tenta importar a função específica do gerador de gráficos.
-try:
-    from utils.graph_generator import generate_session_graphs
-
-    GRAPHING_ENABLED = True
-except ImportError:
-    GRAPHING_ENABLED = False
-    logging.getLogger(__name__).warning(
-        "Módulo 'graph_generator' ou suas dependências não encontrados. A geração de gráficos está desativada.")
-
 # --- Constantes de Configuração ---
 PLAYER_ROLE_NAME = "Aventureiro"
 LOGS_DIR = "src/logs"
-STATS_LOG_FILE = os.path.join(LOGS_DIR, "rpg_session_stats.csv")
+DB_FILE = os.path.join(LOGS_DIR, "stats.db")
 SESSION_DATA_FILE = os.path.join(LOGS_DIR, "session_data.json")
 
 log = logging.getLogger(__name__)
 
 
-def setup_log_file():
-    """Garante que o diretório e o arquivo de log CSV existam."""
+def setup_database():
+    """Garante que o diretório de logs e o banco de dados existam."""
     if not os.path.exists(LOGS_DIR):
         os.makedirs(LOGS_DIR)
         log.info(f"Diretório de logs '{LOGS_DIR}' criado.")
 
-    if not os.path.exists(STATS_LOG_FILE):
-        with open(STATS_LOG_FILE, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            # --- ALTERAÇÃO AQUI: Removida a coluna 'player_id' ---
-            writer.writerow(['timestamp', 'guild_id', 'session_number', 'player_name', 'action', 'amount'])
-        log.info(f"Arquivo de log de estatísticas criado em '{STATS_LOG_FILE}'.")
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        # Cria a tabela se ela não existir
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS session_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                guild_id TEXT NOT NULL,
+                session_number INTEGER NOT NULL,
+                player_name TEXT NOT NULL,
+                action TEXT NOT NULL,
+                amount INTEGER NOT NULL
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        log.info(f"Banco de dados '{DB_FILE}' verificado/criado com sucesso.")
+    except Exception as e:
+        log.error(f"Falha ao inicializar o banco de dados: {e}", exc_info=True)
 
 
-# --- VIEW PARA MOSTRAR ESTATÍSTICAS GERAIS DE UM JOGADOR ---
+# --- VIEWS (Lógica de UI) ---
+# As Views foram adaptadas para chamar os métodos do COG que agora usam o banco de dados.
 
 class StatsSelectorView(discord.ui.View):
     """Uma View para selecionar um jogador e mostrar suas estatísticas totais."""
 
-    def __init__(self, author: discord.Member):
-        super().__init__(timeout=180)  # Timeout de 3 minutos
+    def __init__(self, author: discord.Member, cog_instance):
+        super().__init__(timeout=180)
         self.author = author
+        self.cog = cog_instance
         self.message = None
 
-        players = self._get_players(author.guild)
+        players = self.cog._get_players(author.guild)
         if not players:
             return
 
         options = [discord.SelectOption(label=player.display_name, value=str(player.id)) for player in players]
-        player_select_menu = discord.ui.Select(placeholder="Selecione um jogador para ver as estatísticas...",
-                                               options=options)
+        player_select_menu = discord.ui.Select(placeholder="Selecione um jogador...", options=options)
         player_select_menu.callback = self.player_select_callback
         self.add_item(player_select_menu)
 
-    def _get_players(self, guild: discord.Guild) -> list[discord.Member]:
-        player_role = discord.utils.find(lambda r: r.name.lower() == PLAYER_ROLE_NAME.lower(), guild.roles)
-        if not player_role:
-            return []
-        return [member for member in guild.members if player_role in member.roles and not member.bot]
-
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author.id:
-            await interaction.response.send_message("Apenas quem iniciou o comando pode interagir com ele.",
-                                                    ephemeral=True)
+            await interaction.response.send_message("Apenas quem iniciou o comando pode interagir.", ephemeral=True)
             return False
         return True
 
@@ -89,20 +87,8 @@ class StatsSelectorView(discord.ui.View):
             await interaction.followup.send("Jogador não encontrado.", ephemeral=True)
             return
 
-        stats = defaultdict(int)
-        try:
-            with open(STATS_LOG_FILE, 'r', newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    # --- ALTERAÇÃO AQUI: Busca por nome em vez de ID ---
-                    if row['guild_id'] == str(interaction.guild.id) and row['player_name'] == player.display_name:
-                        stats[row['action']] += int(row['amount'])
-        except FileNotFoundError:
-            pass
-        except Exception as e:
-            log.error(f"Erro ao ler o arquivo de estatísticas: {e}")
-            await interaction.followup.send("Ocorreu um erro ao ler as estatísticas.", ephemeral=True)
-            return
+        # <-- NOVA LÓGICA: Busca os dados do banco
+        stats = self.cog._get_player_total_stats(interaction.guild.id, player.display_name)
 
         embed = discord.Embed(title=f"Estatísticas Totais de {player.display_name}", color=player.color)
         embed.set_thumbnail(url=player.display_avatar.url)
@@ -117,42 +103,28 @@ class StatsSelectorView(discord.ui.View):
         await interaction.edit_original_response(embed=embed, view=None)
 
 
-# --- VIEW PARA MOSTRAR ESTATÍSTICAS DE UMA SESSÃO ---
-# (Esta classe não precisa de alterações, pois já funciona com os dados da linha inteira)
 class SessionStatsSelectorView(discord.ui.View):
     """Uma View para selecionar uma SESSÃO e mostrar suas estatísticas."""
 
-    def __init__(self, author: discord.Member):
-        super().__init__(timeout=180)  # Timeout de 3 minutos
+    def __init__(self, author: discord.Member, cog_instance):
+        super().__init__(timeout=180)
         self.author = author
+        self.cog = cog_instance
         self.message = None
 
-        sessions = self._get_available_sessions(author.guild.id)
+        # <-- NOVA LÓGICA: Busca as sessões do banco
+        sessions = self.cog._get_available_sessions(author.guild.id)
         if not sessions:
             return
 
         options = [discord.SelectOption(label=f"Sessão {s}", value=str(s)) for s in sorted(sessions, reverse=True)]
-        session_select_menu = discord.ui.Select(placeholder="Selecione uma sessão para ver os detalhes...",
-                                                options=options)
+        session_select_menu = discord.ui.Select(placeholder="Selecione uma sessão...", options=options)
         session_select_menu.callback = self.session_select_callback
         self.add_item(session_select_menu)
 
-    def _get_available_sessions(self, guild_id: int) -> set:
-        sessions = set()
-        try:
-            with open(STATS_LOG_FILE, 'r', newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if row['guild_id'] == str(guild_id):
-                        sessions.add(int(row['session_number']))
-        except FileNotFoundError:
-            pass
-        return sessions
-
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author.id:
-            await interaction.response.send_message("Apenas quem iniciou o comando pode interagir com ele.",
-                                                    ephemeral=True)
+            await interaction.response.send_message("Apenas quem iniciou o comando pode interagir.", ephemeral=True)
             return False
         return True
 
@@ -164,55 +136,39 @@ class SessionStatsSelectorView(discord.ui.View):
 
     async def session_select_callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        selected_session = self.children[0].values[0]
-        session_rows_for_graph = []
+        selected_session = int(self.children[0].values[0])
 
-        try:
-            with open(STATS_LOG_FILE, 'r', newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if row.get('guild_id') == str(interaction.guild.id) and row.get(
-                            'session_number') == selected_session:
-                        session_rows_for_graph.append(row)
-        except FileNotFoundError:
-            await interaction.followup.send("Arquivo de estatísticas não encontrado.", ephemeral=True)
-            return
-        except Exception as e:
-            log.error(f"Erro ao ler o arquivo de estatísticas para a sessão {selected_session}: {e}", exc_info=True)
-            await interaction.followup.send("Ocorreu um erro ao ler as estatísticas.", ephemeral=True)
-            return
+        # <-- NOVA LÓGICA: Busca os dados da sessão do banco
+        session_stats = self.cog._get_session_stats(interaction.guild.id, selected_session)
 
-        graph_filepath = None
-        graph_file = None
-        if GRAPHING_ENABLED and session_rows_for_graph:
-            try:
-                loop = asyncio.get_running_loop()
-                graph_filepath = await loop.run_in_executor(
-                    None, generate_session_graphs, session_rows_for_graph, int(selected_session)
-                )
-                if graph_filepath:
-                    graph_file = discord.File(graph_filepath, filename=os.path.basename(graph_filepath))
-            except Exception as e:
-                log.error(f"Falha ao gerar o gráfico para a sessão {selected_session}: {e}", exc_info=True)
-
-        embed = discord.Embed(title=f"Estatísticas da Sessão {selected_session}", color=discord.Color.purple())
-        if graph_file:
-            embed.set_image(url=f"attachment://{graph_file.filename}")
-            await interaction.edit_original_response(embed=embed, attachments=[graph_file], view=None)
-            if graph_filepath and os.path.exists(graph_filepath):
-                os.remove(graph_filepath)
-        else:
-            embed.description = "Não foi possível gerar um gráfico para esta sessão (sem dados ou a biblioteca de gráficos está desativada)."
+        embed = discord.Embed(title=f"Resumo da Sessão {selected_session}", color=discord.Color.purple())
+        if not session_stats:
+            embed.description = "Nenhum dado encontrado para esta sessão."
             await interaction.edit_original_response(embed=embed, view=None)
+            return
+
+        summary_text = ""
+        action_names = {
+            "causado": "Dano Causado", "recebido": "Dano Recebido", "cura": "Cura",
+            "eliminacao": "Abates", "jogador_caido": "Quedas",
+            "critico_sucesso": "Críticos (20)", "critico_falha": "Falhas (1)"
+        }
+
+        for player, stats in sorted(session_stats.items()):
+            summary_text += f"**{player}**\n"
+            player_lines = [f"• {friendly_name}: `{stats[action]}`" for action, friendly_name in action_names.items() if
+                            stats.get(action, 0) > 0]
+            summary_text += "\n".join(player_lines) + "\n\n" if player_lines else "Nenhuma atividade registrada.\n\n"
+
+        embed.description = summary_text
+        await interaction.edit_original_response(embed=embed, view=None)
 
 
-# --- VIEW PARA REGISTRAR EVENTOS ---
-# (Esta classe não precisa de alterações, pois a lógica de salvar já foi alterada no _log_event)
 class SessionTrackerView(discord.ui.View):
     """Uma View interativa para registrar eventos de sessão."""
 
     def __init__(self, author: discord.Member, bot: commands.Bot):
-        super().__init__(timeout=180)  # Timeout de 3 minutos
+        super().__init__(timeout=180)
         self.author = author
         self.bot = bot
         self.action_type = None
@@ -346,9 +302,11 @@ class SessionTrackerView(discord.ui.View):
         event_text = self.action_type.replace('_', ' ').title()
         final_message = f"✅ Registrado: **{player.display_name}** - **{event_text}**."
         final_embed = self._create_embed(final_message, color=discord.Color.green())
-        await interaction.response.edit_message(embed=final_embed, view=None)
+        await interaction.edit_original_response(embed=final_embed, view=None)
         self.stop()
 
+
+# --- COG PRINCIPAL ---
 
 class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
     """Cog para registrar e visualizar estatísticas de sessão de RPG."""
@@ -356,8 +314,9 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.session_data = self._load_session_data()
-        setup_log_file()
+        setup_database()
 
+    # --- Métodos de Gerenciamento de Dados (JSON para sessão ativa) ---
     def _load_session_data(self) -> dict:
         try:
             with open(SESSION_DATA_FILE, 'r', encoding='utf-8') as f:
@@ -372,21 +331,78 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
         except IOError as e:
             log.error(f"Falha ao salvar os dados da sessão: {e}")
 
+    # --- Métodos de Interação com o Banco de Dados (SQLite) ---
     def _log_event(self, guild_id: int, player: discord.Member, action: str, amount: int):
+        """Registra um evento no banco de dados SQLite."""
         timestamp = datetime.utcnow().isoformat()
-        session_number = self.session_data.get(str(guild_id), 1)  # Padrão para sessão 1 se não definida
-
-        # --- ALTERAÇÃO AQUI: Removido 'player.id' da lista ---
-        log_entry = [timestamp, guild_id, session_number, player.display_name, action, amount]
+        session_number = self.session_data.get(str(guild_id), 1)
 
         try:
-            with open(STATS_LOG_FILE, 'a', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(log_entry)
-            log.info(f"Estatística registrada: {log_entry}")
-        except IOError as e:
-            log.error(f"Falha ao escrever no arquivo de estatísticas '{STATS_LOG_FILE}': {e}")
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO session_stats (timestamp, guild_id, session_number, player_name, action, amount) VALUES (?, ?, ?, ?, ?, ?)",
+                (timestamp, str(guild_id), session_number, player.display_name, action, amount)
+            )
+            conn.commit()
+            conn.close()
+            log.info(f"Estatística registrada para {player.display_name}: {action} - {amount}")
+        except Exception as e:
+            log.error(f"Falha ao escrever no banco de dados: {e}", exc_info=True)
 
+    def _get_player_total_stats(self, guild_id: int, player_name: str) -> defaultdict:
+        """Busca as estatísticas totais de um jogador no banco de dados."""
+        stats = defaultdict(int)
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT action, SUM(amount) FROM session_stats WHERE guild_id = ? AND player_name = ? GROUP BY action",
+                (str(guild_id), player_name)
+            )
+            for action, total_amount in cursor.fetchall():
+                stats[action] = total_amount
+            conn.close()
+        except Exception as e:
+            log.error(f"Erro ao buscar estatísticas de {player_name}: {e}", exc_info=True)
+        return stats
+
+    def _get_available_sessions(self, guild_id: int) -> list[int]:
+        """Retorna uma lista de números de sessão únicos do banco de dados."""
+        sessions = []
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT session_number FROM session_stats WHERE guild_id = ?", (str(guild_id),))
+            sessions = [row[0] for row in cursor.fetchall()]
+            conn.close()
+        except Exception as e:
+            log.error(f"Erro ao buscar sessões disponíveis: {e}", exc_info=True)
+        return sessions
+
+    def _get_session_stats(self, guild_id: int, session_number: int) -> defaultdict:
+        """Busca as estatísticas de uma sessão específica do banco de dados."""
+        session_stats = defaultdict(lambda: defaultdict(int))
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT player_name, action, SUM(amount) FROM session_stats WHERE guild_id = ? AND session_number = ? GROUP BY player_name, action",
+                (str(guild_id), session_number)
+            )
+            for player_name, action, total_amount in cursor.fetchall():
+                session_stats[player_name][action] = total_amount
+            conn.close()
+        except Exception as e:
+            log.error(f"Erro ao buscar estatísticas da sessão {session_number}: {e}", exc_info=True)
+        return session_stats
+
+    def _get_players(self, guild: discord.Guild) -> list[discord.Member]:
+        """Helper para pegar membros com o cargo de jogador."""
+        player_role = discord.utils.find(lambda r: r.name.lower() == PLAYER_ROLE_NAME.lower(), guild.roles)
+        return [m for m in guild.members if player_role and player_role in m.roles and not m.bot] if player_role else []
+
+    # --- Comandos do Bot ---
     @commands.command(name='log', help='Abre um menu para registrar eventos da sessão.')
     @commands.guild_only()
     async def log_event(self, ctx: commands.Context):
@@ -400,7 +416,7 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
     @commands.guild_only()
     async def show_stats(self, ctx: commands.Context):
         """Inicia um menu para visualizar as estatísticas totais de um jogador."""
-        view = StatsSelectorView(author=ctx.author)
+        view = StatsSelectorView(author=ctx.author, cog_instance=self)
         if not view.children:
             embed = discord.Embed(
                 title="Visualizador de Estatísticas",
@@ -422,7 +438,7 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
     @commands.guild_only()
     async def show_session_stats(self, ctx: commands.Context):
         """Inicia um menu para visualizar as estatísticas de uma sessão específica."""
-        view = SessionStatsSelectorView(author=ctx.author)
+        view = SessionStatsSelectorView(author=ctx.author, cog_instance=self)
         if not view.children:
             embed = discord.Embed(
                 title="Visualizador de Estatísticas de Sessão",
@@ -460,86 +476,64 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
         )
         await ctx.reply(embed=embed)
 
-
     @commands.command(name='mvp', aliases=['destaques'], help='Mostra os jogadores destaque da campanha.')
     @commands.guild_only()
     async def show_mvps(self, ctx: commands.Context):
-        """Compila todas as estatísticas do servidor e mostra os jogadores com os maiores recordes."""
-
+        """Compila estatísticas do banco de dados e mostra os recordistas."""
         async with ctx.typing():
-            # Estrutura para guardar os totais: {'PlayerName': {'action': total_amount}}
-            all_player_stats = defaultdict(lambda: defaultdict(int))
-
             try:
-                with open(STATS_LOG_FILE, 'r', newline='', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        if row['guild_id'] == str(ctx.guild.id):
-                            player_name = row['player_name']
-                            action = row['action']
-                            amount = int(row['amount'])
-                            all_player_stats[player_name][action] += amount
-            except FileNotFoundError:
-                await ctx.reply("Ainda não há dados de sessão registrados para determinar os MVPs.")
-                return
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
 
-            if not all_player_stats:
-                await ctx.reply("Ainda não há dados suficientes neste servidor para determinar os MVPs.")
-                return
+                action_map = {
+                    "causado": ("⚔️ Mão Pesada", "Maior Dano Causado"),
+                    "recebido": ("🛡️ Muralha de Carne", "Maior Dano Recebido"),
+                    "cura": ("❤️ Fonte de Vida", "Maior Cura Realizada"),
+                    "eliminacao": ("🎯 O Carrasco", "Mais Eliminações"),
+                    "jogador_caido": ("💀 Saco de Pancada", "Mais Vezes Caído"),
+                    "critico_sucesso": ("✨ O Sortudo", "Mais Acertos Críticos (20)"),
+                    "critico_falha": ("💥 O Azarado", "Mais Falhas Críticas (1)"),
+                }
 
-            # Dicionário para guardar os MVPs de cada categoria
-            mvps = {}
+                embed = discord.Embed(
+                    title=f"🏆 Hall da Fama de {ctx.guild.name}",
+                    description="Os jogadores que deixaram sua marca na campanha!",
+                    color=discord.Color.gold()
+                )
 
-            # Mapeia a 'action' para um título e descrição amigáveis
-            action_map = {
-                "causado": ("⚔️ Mão Pesada", "Maior Dano Causado"),
-                "recebido": ("🛡️ Muralha de Carne", "Maior Dano Recebido"),
-                "cura": ("❤️ Fonte de Vida", "Maior Cura Realizada"),
-                "eliminacao": ("🎯 O Carrasco", "Mais Eliminações"),
-                "jogador_caido": ("💀 Saco de Pancada", "Mais Vezes Caído"),
-                "critico_sucesso": ("✨ O Sortudo", "Mais Acertos Críticos (20)"),
-                "critico_falha": ("💥 O Azarado", "Mais Falhas Críticas (1)"),
-            }
+                found_any_mvp = False
+                for action, (title, desc) in action_map.items():
+                    cursor.execute("""
+                        SELECT player_name, SUM(amount) as total
+                        FROM session_stats
+                        WHERE guild_id = ? AND action = ?
+                        GROUP BY player_name
+                        ORDER BY total DESC
+                        LIMIT 1
+                    """, (str(ctx.guild.id), action))
 
-            # Encontra o jogador com o maior valor para cada ação
-            for action, (title, desc) in action_map.items():
-                top_player = None
-                max_value = -1
+                    result = cursor.fetchone()
+                    if result and result[1] > 0:
+                        player, value = result
+                        embed.add_field(name=title, value=f"**{player}** com um total de `{value}`\n*({desc})*",
+                                        inline=False)
+                        found_any_mvp = True
+                    else:
+                        embed.add_field(name=title, value=f"Ninguém se destacou ainda.\n*({desc})*", inline=False)
 
-                for player_name, stats in all_player_stats.items():
-                    current_value = stats.get(action, 0)
-                    if current_value > max_value:
-                        max_value = current_value
-                        top_player = player_name
+                conn.close()
 
-                if top_player and max_value > 0:
-                    mvps[action] = (top_player, max_value)
+                if not found_any_mvp:
+                    await ctx.reply("Ainda não há dados suficientes neste servidor para determinar os MVPs.")
+                    return
 
-            # Cria o embed com os resultados
-            embed = discord.Embed(
-                title=f"🏆 Hall da Fama de {ctx.guild.name}",
-                description="Os jogadores que deixaram sua marca na campanha!",
-                color=discord.Color.gold()
-            )
+                embed.set_footer(text="Estes são os recordes totais de todas as sessões.")
+                await ctx.send(embed=embed)
 
-            for action, (title, desc) in action_map.items():
-                if action in mvps:
-                    player, value = mvps[action]
-                    embed.add_field(
-                        name=title,
-                        value=f"**{player}** com um total de `{value}`\n*({desc})*",
-                        inline=False
-                    )
-                else:
-                    # Caso ninguém tenha registrado essa ação ainda
-                    embed.add_field(
-                        name=title,
-                        value=f"Ninguém se destacou ainda.\n*({desc})*",
-                        inline=False
-                    )
+            except Exception as e:
+                log.error(f"Erro ao gerar MVPs: {e}", exc_info=True)
+                await ctx.reply("Ocorreu um erro ao consultar o Hall da Fama.")
 
-            embed.set_footer(text="Estes são os recordes totais de todas as sessões.")
-            await ctx.send(embed=embed)
 
 async def setup(bot: commands.Bot):
     """Função que o discord.py chama para carregar a cog."""

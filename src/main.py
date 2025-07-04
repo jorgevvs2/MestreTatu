@@ -111,7 +111,7 @@ class TatuBot(commands.Bot):
         """Hook executado para carregar as extensões (cogs) antes do bot conectar."""
         log.info("Carregando extensões (cogs)...")
         cogs_to_load = [
-            'message_cog', 'help_cog', 'music_cog', 'rpg_cog', 'stations_cog',
+            'message_cog', 'help_cog','rpg_cog',
             'dice_cog', 'lookup_cog', 'logging_cog', 'session_cog', 'initiative_cog'
         ]
         for cog_name in cogs_to_load:

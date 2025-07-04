@@ -1,39 +1,33 @@
-# Use an official Python runtime as a parent image
-FROM python:3.10-slim
+# --- Estágio 1: Builder ---
+# Usamos uma imagem completa para ter as ferramentas de build necessárias para o pip.
+FROM python:3.10 as builder
 
-# Set the working directory in the container
+# Define o diretório de trabalho
 WORKDIR /app
 
-# --- FIX: Install system dependencies for Plotly/Kaleido, including Chromium ---
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Full Chromium browser, which Kaleido needs to render images
-    chromium \
-    # Fonts required by Chromium
-    fonts-liberation \
-    # Existing dependencies for headless operation
-    libnss3 \
-    libgconf-2-4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libgdk-pixbuf2.0-0 \
-    libgtk-3-0 \
-    libgbm-dev \
-    libasound2 \
-    # Clean up the apt cache to keep the image size down
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy the requirements file into the container at /app
+# Instala as dependências primeiro para aproveitar o cache do Docker
 COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix="/install" -r requirements.txt
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Copia o resto do código da aplicação
+COPY src/ ./src/
 
-# Copy the rest of the application's code into the container at /app
-COPY . .
 
-# Make port 8080 available to the world outside this container
-# This is for the health check endpoint for services like Cloud Run
+# --- Estágio 2: Final ---
+# Usamos a imagem 'slim' que é muito menor, pois não precisamos mais das ferramentas de build.
+FROM python:3.10-slim
+
+# Define o diretório de trabalho
+WORKDIR /app
+
+# Copia apenas as dependências já instaladas do estágio 'builder'
+COPY --from=builder /install /usr/local
+
+# Copia apenas o código-fonte necessário do estágio 'builder'
+COPY --from=builder /app/src ./src
+
+# Expõe a porta para o health check
 EXPOSE 8080
 
-# Define the command to run your app
+# Define o comando para rodar a aplicação
 CMD ["python", "src/main.py"]

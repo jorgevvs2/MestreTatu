@@ -20,3 +20,4 @@
 [2025-07-03 20:47:10] | Guild: O Buraco do Tatu | User: vinim13#0 (403608215868145665) | Input: .rpg qual a diferença entre os juramentos do paladino?
 [2025-07-03 20:49:31] | Guild: O Buraco do Tatu | User: vinim13#0 (403608215868145665) | Input: .rpg eu de paladinho tenho +4 de força e +2 de bonus de proficiencia, quanto devo somar nos meus dados de ataque? tenho maestria em armas
 [2025-07-04 00:18:37] | Guild: Jorgevvs's server | User: jorgevvs#0 (375348922459226112) | Input: .rpg quais sao as magias do primeiro circulo de mago
+[2025-07-04 01:57:35] | Guild: O Buraco do Tatu | User: luizeduardobp#0 (353557951145050114) | Input: .rpg me mostre todas as invocações misticas da classe bruxo, e liste as melhores para combate corpo a corpo
