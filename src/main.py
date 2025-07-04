@@ -31,7 +31,7 @@ def health_check():
 def run_web_server():
     """Executa o servidor Flask em uma thread separada usando Waitress."""
     # Render define a porta pela variável de ambiente PORT.
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 8080))
     log.info(f"Iniciando servidor web de produção (Waitress) na porta {port}...")
     serve(app, host='0.0.0.0', port=port)
 
