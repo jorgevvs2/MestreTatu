@@ -22,7 +22,6 @@ Construído com `discord.py` e `google-generativeai`, e totalmente containerizad
 ### 📊 Gerenciamento de Campanha
 -   **Registro de Estatísticas**: Grave todos os eventos importantes da sessão — dano, cura, abates, quedas e rolagens críticas — com o comando `.log`.
 -   **Visualização de Dados**: Consulte as estatísticas de um jogador (`.stats`), de uma sessão específica (`.sessionstats`) ou veja o "Hall da Fama" da campanha com os recordistas de cada categoria (`.mvp`).
--   **Gráficos de Sessão**: Ao final de uma sessão, o bot pode gerar um gráfico visual com o resumo das estatísticas.
 
 ### 🎶 Música e Ambiência
 -   **Suporte a Múltiplas Fontes**: Toca músicas e playlists do YouTube, YouTube Music e Spotify.
@@ -57,23 +56,9 @@ O prefixo padrão do bot é `.`
 | ------------------------- | -------------------------------------------------------------------- | ------------------ |
 | `.log`                    | Abre um menu para registrar eventos da sessão (dano, cura, etc.).    | `.log`             |
 | `.stats`, `.estatisticas` | Mostra as estatísticas totais de um jogador específico.              | `.stats @Jogador`  |
-| `.sessionstats`, `.sessao`| Mostra as estatísticas e o gráfico de uma sessão específica.         | `.sessionstats 5`  |
+| `.sessionstats`, `.sessao`| Mostra um resumo das estatísticas de uma sessão específica.          | `.sessionstats 5`  |
 | `.mvp`, `.destaques`      | Mostra o "Hall da Fama" com os recordistas de cada categoria.        | `.mvp`             |
 | `.setsession`             | (Mestre) Define o número da sessão atual para o registro de logs.    | `.setsession 7`    |
-
-### Comandos de Música
-
-| Comando e Aliases         | Descrição                                             | Exemplo de Uso                    |
-| ------------------------- | ----------------------------------------------------- | --------------------------------- |
-| `.play`, `.p`, `.tocar`   | Toca uma música ou playlist do YouTube/Spotify.       | `.p Never Gonna Give You Up`      |
-| `.join`, `.entrar`        | Faz o bot entrar no seu canal de voz.                 | `.join`                           |
-| `.pause`, `.pausar`       | Pausa a música que está tocando.                      | `.pause`                          |
-| `.resume`, `.continuar`   | Retoma a música que estava pausada.                   | `.resume`                         |
-| `.skip`, `.pular`         | Pula para a próxima música da fila.                   | `.skip`                           |
-| `.stop`, `.parar`         | Para a música completamente e limpa a fila.           | `.stop`                           |
-| `.queue`, `.q`, `.fila`   | Mostra as próximas 10 músicas na fila.                | `.queue`                          |
-| `.clear`, `.limpar`       | Limpa todas as músicas da fila.                       | `.clear`                          |
-| `.shuffle`, `.misturar`   | Embaralha a ordem das músicas na fila.                | `.shuffle`                        |
 
 ## 🤝 Contribuições
 
@@ -81,4 +66,4 @@ Contribuições são sempre bem-vindas! Se você tem ideias para novas funcional
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
