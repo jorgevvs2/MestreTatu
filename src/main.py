@@ -1,7 +1,7 @@
 import os
 import random
 import discord
-from discord.ext import commands, tasks # <-- CORREÇÃO: Importado de discord.ext
+from discord.ext import commands, tasks
 import asyncio
 from dotenv import load_dotenv
 import logging
@@ -30,7 +30,8 @@ def health_check():
 
 def run_web_server():
     """Executa o servidor Flask em uma thread separada usando Waitress."""
-    port = int(os.environ.get("PORT", 8080))
+    # Render define a porta pela variável de ambiente PORT.
+    port = int(os.environ.get("PORT", 10000))
     log.info(f"Iniciando servidor web de produção (Waitress) na porta {port}...")
     serve(app, host='0.0.0.0', port=port)
 
@@ -42,8 +43,7 @@ class TatuBot(commands.Bot):
         self.initialize_services()
 
     def initialize_services(self):
-        """Inicializa serviços externos como Gemini e Spotify."""
-        # Inicialização do Gemini
+        """Inicializa serviços externos como Gemini."""
         try:
             gemini_api_key = os.getenv("GEMINI_API_KEY")
             if not gemini_api_key:
@@ -52,13 +52,14 @@ class TatuBot(commands.Bot):
                 self.gemini_flash_model = None
             else:
                 genai.configure(api_key=gemini_api_key)
+                # Usando nomes de modelo válidos e consistentes.
                 self.gemini_pro_model = genai.GenerativeModel(
-                    model_name="gemini-2.5-pro",
+                    model_name="gemini-1.5-pro-latest",
                     generation_config={"temperature": 0.2}
                 )
                 log.info("Modelo Gemini PRO (gemini-1.5-pro-latest) inicializado com sucesso.")
                 self.gemini_flash_model = genai.GenerativeModel(
-                    model_name="gemini-2.5-flash",
+                    model_name="gemini-1.5-flash-latest",
                     generation_config={"temperature": 0.0}
                 )
                 log.info("Modelo Gemini FLASH (gemini-1.5-flash-latest) inicializado com sucesso.")
@@ -71,7 +72,7 @@ class TatuBot(commands.Bot):
         """Hook executado para carregar as extensões (cogs) antes do bot conectar."""
         log.info("Carregando extensões (cogs)...")
         cogs_to_load = [
-            'message_cog', 'help_cog','rpg_cog',
+            'message_cog', 'help_cog', 'rpg_cog',
             'dice_cog', 'lookup_cog', 'logging_cog', 'session_cog', 'initiative_cog'
         ]
         for cog_name in cogs_to_load:
@@ -101,12 +102,12 @@ class TatuBot(commands.Bot):
             "Rolando um d20 decisivo..."
         ]
         new_status = random.choice(status_list)
-        await self.change_presence(activity=discord.CustomActivity(name=new_status))
+        # Usando discord.Game para uma melhor apresentação do status.
+        await self.change_presence(activity=discord.Game(name=new_status))
 
 # --- Função Principal de Execução ---
 async def main():
     """Função principal que configura e inicia o bot."""
-    # Inicia o servidor web em uma thread separada
     web_thread = Thread(target=run_web_server, daemon=True)
     web_thread.start()
 
@@ -115,7 +116,6 @@ async def main():
         log.critical("ERRO FATAL: DISCORD_TOKEN não foi encontrado. O bot não pode iniciar.")
         return
 
-    # Define as intenções (intents) necessárias para o bot
     intents = discord.Intents.default()
     intents.message_content = True
     intents.guilds = True
@@ -124,12 +124,49 @@ async def main():
 
     bot = TatuBot(command_prefix='.', intents=intents, help_command=None)
 
-    try:
-        await bot.start(TOKEN)
-    except discord.errors.LoginFailure:
-        log.critical("ERRO DE LOGIN: O token do Discord fornecido é inválido.")
-    except Exception:
-        log.critical("Ocorreu um erro fatal ao iniciar o bot.", exc_info=True)
+    # --- MELHORIA: Lógica de Retry com Exponential Backoff ---
+    # Isso torna o bot mais resiliente a problemas de rede temporários ou rate limits no início.
+    max_retries = 5
+    retry_delay = 5  # segundos
+
+    for attempt in range(max_retries):
+        try:
+            # Tenta iniciar o bot. Se for bem-sucedido, o loop é interrompido.
+            if attempt > 0:
+                log.info(f"Tentando reconectar... (Tentativa {attempt + 1}/{max_retries})")
+            await bot.start(TOKEN)
+            # Se bot.start() retornar, significa que foi desligado corretamente (ex: por um comando de shutdown).
+            # Então, saímos do loop de retry.
+            break
+        except discord.errors.HTTPException as e:
+            # Foco em erros de rede/API como 429 (Too Many Requests) ou 5xx (Server Error)
+            if e.status == 429 or e.status >= 500:
+                if attempt < max_retries - 1:
+                    log.warning(f"Falha ao conectar (HTTP {e.status}). Tentando novamente em {retry_delay}s...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Aumenta o tempo de espera
+                else:
+                    log.critical(f"Falha ao conectar após {max_retries} tentativas. Desistindo.", exc_info=True)
+                    # Sai do loop após a última tentativa
+                    break
+            else:
+                # Para outros erros HTTP (como 401/403 Login Failure), falha imediatamente.
+                log.critical("Erro HTTP não recuperável durante o login.", exc_info=True)
+                break
+        except discord.errors.LoginFailure:
+            log.critical("ERRO DE LOGIN: O token do Discord fornecido é inválido.")
+            # Não adianta tentar novamente com um token inválido.
+            break
+        except Exception as e:
+            # Captura outras exceções inesperadas (ex: problemas de rede)
+            log.error(f"Ocorreu um erro inesperado ao iniciar o bot: {e}", exc_info=True)
+            if attempt < max_retries - 1:
+                log.warning(f"Tentando novamente em {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+            else:
+                log.critical(f"Falha ao iniciar após {max_retries} tentativas. Desistindo.")
+                break
 
 if __name__ == "__main__":
     try:
