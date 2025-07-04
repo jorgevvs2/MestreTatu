@@ -59,24 +59,17 @@ class StatsSelectorView(discord.ui.View):
         self.cog = cog_instance
         self.message = None
 
-        sessions_data = self.cog._get_available_sessions(author.guild.id)
-        if not sessions_data:
+        # CORREÇÃO: Lógica para buscar jogadores, não sessões.
+        players = self.cog._get_players(author.guild)
+        if not players:
             return
 
-        options = []
-        for s_num, title in sessions_data:
-            # Formata o rótulo para incluir o título, se disponível.
-            label = f"Sessão {s_num}"
-            if title:
-                # Limita o tamanho do título para não exceder o limite do Discord.
-                truncated_title = (title[:80] + '...') if len(title) > 80 else title
-                label += f": {truncated_title}"
+        options = [discord.SelectOption(label=player.display_name, value=str(player.id)) for player in players]
+        player_select_menu = discord.ui.Select(placeholder="Selecione um jogador...", options=options)
 
-            options.append(discord.SelectOption(label=label, value=str(s_num)))
-
-        session_select_menu = discord.ui.Select(placeholder="Selecione uma sessão...", options=options)
-        session_select_menu.callback = self.session_select_callback
-        self.add_item(session_select_menu)
+        # CORREÇÃO: Atribuir o callback correto.
+        player_select_menu.callback = self.player_select_callback
+        self.add_item(player_select_menu)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author.id:
@@ -116,18 +109,27 @@ class StatsSelectorView(discord.ui.View):
 
 class SessionStatsSelectorView(discord.ui.View):
     """Uma View para selecionar uma sessão e mostrar seus detalhes."""
-
     def __init__(self, author: discord.Member, cog_instance):
         super().__init__(timeout=180)
         self.author = author
         self.cog = cog_instance
         self.message = None
 
-        sessions = self.cog._get_available_sessions(author.guild.id)
-        if not sessions:
+        sessions_data = self.cog._get_available_sessions(author.guild.id)
+        if not sessions_data:
             return
 
-        options = [discord.SelectOption(label=f"Sessão {s_num}", value=str(s_num)) for s_num in sessions]
+        options = []
+        # CORREÇÃO: Iterar corretamente sobre a tupla (s_num, title).
+        for s_num, title in sessions_data:
+            label = f"Sessão {s_num}"
+            if title:
+                truncated_title = (title[:80] + '...') if len(title) > 80 else title
+                label += f": {truncated_title}"
+
+            # CORREÇÃO: O 'value' deve ser apenas o número da sessão como string.
+            options.append(discord.SelectOption(label=label, value=str(s_num)))
+
         session_select_menu = discord.ui.Select(placeholder="Selecione uma sessão...", options=options)
         session_select_menu.callback = self.session_select_callback
         self.add_item(session_select_menu)
