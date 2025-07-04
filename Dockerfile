@@ -19,3 +19,4 @@ COPY src/ ./src/
 
 # Command to run the application
 CMD ["python", "src/main.py"]
+CMD ["./start.sh"]
