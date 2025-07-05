@@ -14,8 +14,8 @@ log = logging.getLogger(__name__)
 PLAYER_ROLE_NAME = "Aventureiro"
 
 # --- Caminhos para Arquivos Persistentes ---
-DB_FILE = '../logs/stats.db'
-SESSION_DATA_FILE = '../logs/session_data.json'
+DB_FILE = '/app/src/logs/stats.db'
+SESSION_DATA_FILE = '/app/src/session_data.json'
 
 def setup_database():
     """Garante que as tabelas do banco de dados existam no caminho correto."""
