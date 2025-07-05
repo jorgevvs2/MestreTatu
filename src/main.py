@@ -85,7 +85,7 @@ class TatuBot(commands.Bot):
             "Rolando um d20 decisivo..."
         ]
         new_status = random.choice(status_list)
-        await self.change_presence(activity=discord.Game(name=new_status))
+        await self.change_presence(activity=discord.CustomActivity(name=new_status))
 
 # --- Função Principal de Execução ---
 async def main():

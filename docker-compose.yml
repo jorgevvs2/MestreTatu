@@ -19,9 +19,3 @@ services:
     # Make sure your .env file is in the same directory as this file.
     env_file:
       - .env
-
-    # This is the key for data persistence. It maps a local directory
-    # on your server to the /data directory inside the container.
-    # All databases and JSON files will be stored here, safe from container restarts.
-    volumes:
-      - ./data:/data
