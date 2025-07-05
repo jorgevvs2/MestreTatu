@@ -1,29 +1,27 @@
 # docker-compose.yml
-# Orquestra o ambiente de desenvolvimento local do MestreTatu.
-
-version: '3.8'
+# This file uses the modern Docker Compose specification.
+# The top-level 'version' key is no longer required.
 
 services:
-  tatubeats:
-    # Constrói a imagem a partir do Dockerfile no diretório atual.
+  mestre-tatu:
+    # Build the Docker image from the Dockerfile in the current directory.
+    # The image will be tagged based on the directory name.
     build: .
-    # Renomeia o contêiner para algo amigável no Docker Desktop.
-    container_name: mestretatu_bot
-    # Reinicia o contêiner automaticamente se ele parar por algum erro.
+
+    # A friendly, predictable name for your container.
+    container_name: mestre-tatu-bot
+
+    # Ensures the bot restarts automatically if it crashes or the server reboots.
+    # 'unless-stopped' means it won't start on boot if you manually stopped it.
     restart: unless-stopped
 
-    # Mapeia a porta 8080 do contêiner para a porta 8080 da sua máquina
-    # para que você possa acessar o health check em http://localhost:8080
-    ports:
-      - "8080:8080"
-
-    # Carrega as variáveis de ambiente do seu arquivo .env.
-    # NUNCA adicione o .env ao controle de versão (git).
+    # Load environment variables (your secrets) from the .env file.
+    # Make sure your .env file is in the same directory as this file.
     env_file:
       - .env
 
-    # É aqui que a mágica do hot-reloading acontece.
-    # Monta a pasta 'src' local na pasta '/app/src' dentro do contêiner.
-    # Qualquer alteração nos seus arquivos .py será refletida instantaneamente.
+    # This is the key for data persistence. It maps a local directory
+    # on your server to the /data directory inside the container.
+    # All databases and JSON files will be stored here, safe from container restarts.
     volumes:
-      - ./src:/app/src
+      - ./data:/data

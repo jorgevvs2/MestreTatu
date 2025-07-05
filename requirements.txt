@@ -5,6 +5,4 @@ python-dotenv
 # Funcionalidades de IA e Web
 google-generativeai
 protobuf
-Flask
-waitress
 requests

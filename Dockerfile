@@ -1,33 +1,35 @@
 # Dockerfile
 
-# Use an official, slim Python image as the base
-FROM python:3.10-slim
+# --- Stage 1: Builder ---
+# Use a more recent and secure base image. Bookworm is the current stable Debian.
+FROM python:3.10-slim-bookworm AS builder
 
-# Set the working directory inside the container to /app
+# Copy only the requirements file to leverage Docker's layer cache.
+COPY requirements.txt .
+
+# Install Python dependencies into the standard location for this Python version.
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+
+# --- Stage 2: Final Image ---
+# This stage builds the final, lean image for your bot.
+FROM python:3.10-slim-bookworm
+
+# Set the working directory inside the container
 WORKDIR /app
 
-# --- CORREÇÃO: Instalar dependências do sistema (wget) ---
-# Atualiza a lista de pacotes e instala o wget.
-# O -y confirma automaticamente, e a limpeza no final reduz o tamanho da imagem.
-RUN apt-get update && \
-    apt-get install -y wget && \
-    rm -rf /var/lib/apt/lists/*
+# --- THE FIX ---
+# Copy the installed packages from the builder's site-packages directory
+# to the same location in the final image.
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 
-# Copy all project files from the current directory on the host
-# to the /app directory in the container.
-# This is the most robust way to ensure start.sh, requirements.txt,
-# and the src/ folder are all included.
-COPY . .
+# Copy your bot's source code into the image
+COPY src/ ./src/
 
-# Install the Python dependencies from requirements.txt
-# The --no-cache-dir flag makes the final image smaller
-RUN pip install --no-cache-dir -r requirements.txt
+# Ensure logs are not buffered
+ENV PYTHONUNBUFFERED=1
 
-# Make sure the start script is executable inside the container.
-# This is a more reliable method than relying on Git permissions,
-# as it happens during the image build itself.
-RUN chmod +x ./start.sh
-
-# Command to run when the container launches.
-# There should only be ONE CMD instruction.
-CMD ["./start.sh"]
+# The command to run when the container starts.
+# No need for PYTHONPATH, as we copied the packages to the standard location.
+CMD ["python", "-m", "src.main"]
