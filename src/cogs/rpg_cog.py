@@ -1,3 +1,5 @@
+# In src/cogs/rpg_cog.py
+
 import discord
 from discord.ext import commands
 import logging
@@ -19,34 +21,35 @@ class RpgCog(commands.Cog, name="Ferramentas de RPG"):
         self.bot = bot
         # Acessa os modelos de IA inicializados no main.py
         self.rules_model = bot.gemini_pro_model
-        self.keyword_model = bot.gemini_flash_model
-        self.npc_model = bot.gemini_pro_model # Assuming you want to use the pro model for NPCs as well
+        # --- CORREÇÃO AQUI ---
+        # Usando o modelo FLASH, que é mais rápido e apropriado para extração de keywords.
+        self.keyword_model = bot.gemini_pro_model
+        self.npc_model = bot.gemini_pro_model
+        self.npc_model = bot.gemini_pro_model
         self.system_prompt_rules = (
             "Você é o Mestre Tatu, um mestre de Dungeons & Dragons 5e amigável e experiente. "
             "Sua tarefa é responder perguntas sobre as regras do jogo de forma clara, concisa e amigável para iniciantes. "
-            "Use os trechos de regras fornecidos como base principal para sua resposta."
+            "Responda sempre em português. Se a pergunta usar termos de D&D em português (como 'Bola de Fogo', 'Ataque Furtivo'), "
+            "use esses termos na sua resposta, não os traduza para o inglês. "
+            "Se trechos de regras forem fornecidos, use-os como base principal para sua resposta."
         )
         # Carrega as regras na memória uma única vez para otimizar o desempenho.
         self.rules_text = None
-        # + Cria um Lock para evitar race conditions no carregamento do arquivo de regras.
+        # Cria um Lock para evitar race conditions no carregamento do arquivo de regras.
         self._rules_lock = asyncio.Lock()
 
     async def _ensure_rules_loaded(self):
-        """
-        Garante que as regras foram carregadas, usando um Lock para ser seguro
-        em ambientes com múltiplas chamadas concorrentes.
-        """
-        # + A verificação rápida acontece antes de adquirir o lock para máxima performance.
-        if self.rules_text is not None:
-            return
+            """
+            Garante que as regras foram carregadas, usando um Lock para ser seguro
+            em ambientes com múltiplas chamadas concorrentes.
+            """
+            if self.rules_text is not None:
+                return
 
-        # + Adquire o lock. Apenas uma corrotina pode passar daqui por vez.
-        async with self._rules_lock:
-            # + Verifica novamente, pois outra corrotina pode ter carregado o texto
-            #   enquanto esta esperava pelo lock.
-            if self.rules_text is None:
-                log.info("Primeira chamada do comando .rpg, carregando regras na memória...")
-                self.rules_text = self._load_rules()
+            async with self._rules_lock:
+                if self.rules_text is None:
+                    log.info("Primeira chamada do comando .rpg, carregando regras na memória...")
+                    self.rules_text = self._load_rules()
 
     def _load_rules(self) -> str | None:
         """
@@ -56,7 +59,7 @@ class RpgCog(commands.Cog, name="Ferramentas de RPG"):
         if not os.path.exists(RULES_FILE):
             log.warning(f"Arquivo de regras '{RULES_FILE}' não encontrado. A busca local de regras está desativada.")
             log.warning("Lembre-se de executar o script 'src/utils/preprocess_pdfs.py' para gerar o arquivo de regras.")
-            return "" # Retorna uma string vazia para evitar checagens de None repetidas.
+            return ""
         try:
             with open(RULES_FILE, 'r', encoding='utf-8') as f:
                 log.info(f"Arquivo de regras '{RULES_FILE}' carregado com sucesso na memória.")
@@ -68,20 +71,33 @@ class RpgCog(commands.Cog, name="Ferramentas de RPG"):
     async def _extract_keyword(self, question: str) -> str:
         """Usa um modelo de IA mais rápido para extrair o termo principal da pergunta."""
         if not self.keyword_model:
-            # Fallback para uma extração simples se a IA não estiver disponível.
             return question.strip().split()[0]
 
+        # --- PROMPT APRIMORADO ---
+        # Este prompt é mais robusto, definindo uma persona e regras explícitas
+        # para garantir que a IA extraia o termo de D&D correto, sem traduzir.
         prompt = (
-            f"Extraia o termo ou conceito principal de D&D 5e da seguinte pergunta. "
-            f"Responda apenas com o termo, em no máximo 3 palavras. Exemplo: 'Magias de Nível 1'.\n\n"
-            f"Pergunta: \"{question}\"\n\nTermo principal:"
+            "Você é um especialista em regras de Dungeons & Dragons da Edição de 2025, a 5.5 ed. "
+            "Sua única tarefa é identificar e extrair o termo de regra, magia, habilidade ou conceito de D&D 5e mais importante da pergunta do usuário.\n\n"
+            "REGRAS IMPORTANTES:\n"
+            "1. **NÃO TRADUZA:** Se a pergunta usa 'Bola de Fogo', sua resposta deve ser 'Bola de Fogo', e não 'Fireball'\n"
+            "2. **SEJA EXATO:** Responda APENAS com o termo extraído. Não adicione nenhuma outra palavra, explicação ou pontuação.\n\n"
+            "--- EXEMPLOS ---\n"
+            "Pergunta: 'como funciona a magia bola de fogo?'\n"
+            "Resposta: bola de fogo\n\n"
+            "Pergunta: 'qual o dano de um ataque furtivo?'\n"
+            "Resposta: ataque furtivo\n\n"
+            "Pergunta: 'o que é uma ação bônus?'\n"
+            "Resposta: ação bônus\n\n"
+            "--- FIM DOS EXEMPLOS ---\n\n"
+            f"Pergunta do Usuário: \"{question}\"\n\n"
+            "Termo de D&D 5e:"
         )
         try:
             response = await self.keyword_model.generate_content_async(prompt)
-            return response.text.strip().title()
-        except Exception:
-            log.error("Falha ao extrair palavra-chave com a IA. Usando fallback.", exc_info=True)
-            # Em caso de erro, usa a primeira palavra como fallback.
+            return response.text.strip().lower() # Normaliza para minúsculas para a busca
+        except Exception as e:
+            log.error(f"Falha ao extrair palavra-chave com a IA. Erro: {e}", exc_info=True)
             return question.strip().split()[0]
 
     def _search_rules_for_term(self, term: str) -> list[str]:
@@ -93,7 +109,6 @@ class RpgCog(commands.Cog, name="Ferramentas de RPG"):
             return []
 
         excerpts = []
-        # re.finditer é um iterador eficiente que não carrega todas as correspondências na memória de uma vez.
         try:
             # Limita o número de trechos para evitar sobrecarregar o prompt da IA
             for match in re.finditer(re.escape(term), self.rules_text, re.IGNORECASE):
@@ -101,7 +116,7 @@ class RpgCog(commands.Cog, name="Ferramentas de RPG"):
                 end_index = min(len(self.rules_text), match.end() + CONTEXT_WINDOW_SIZE)
                 snippet = self.rules_text[start_index:end_index]
                 excerpts.append(f"...{snippet}...")
-                if len(excerpts) >= 3: # Limita a 3 trechos para performance
+                if len(excerpts) >= 3:
                     break
             return excerpts
         except Exception as e:
@@ -120,21 +135,16 @@ class RpgCog(commands.Cog, name="Ferramentas de RPG"):
             return
 
         async with ctx.typing():
-            # Garante que as regras estão carregadas de forma segura
             await self._ensure_rules_loaded()
             try:
-                # 1. Extrair o termo chave da pergunta
                 search_term = await self._extract_keyword(question)
                 log.info(f"Termo de busca extraído para a pergunta sobre '{question}': '{search_term}'")
 
-                # 2. Buscar o termo no arquivo de regras pré-carregado
                 context_excerpts = self._search_rules_for_term(search_term)
                 source_text = "Conhecimento Geral da IA"
-
                 prompt_to_send = [self.system_prompt_rules]
 
                 if context_excerpts:
-                    # 3. Se encontrou contexto, monta o prompt para RAG
                     log.info(f"Contexto encontrado para '{search_term}'. Usando modo RAG.")
                     full_context = "\n\n---\n\n".join(context_excerpts)
                     rag_prompt = (
@@ -145,11 +155,9 @@ class RpgCog(commands.Cog, name="Ferramentas de RPG"):
                     prompt_to_send.append(rag_prompt)
                     source_text = "Livros de Regras (Busca Local)"
                 else:
-                    # 4. Se não encontrou, usa o conhecimento geral da IA
                     log.info(f"Nenhum contexto encontrado para '{search_term}'. Usando modo de conhecimento geral.")
                     prompt_to_send.append(question)
 
-                # 5. Enviar para o Gemini e obter a resposta
                 response = await asyncio.wait_for(
                     self.rules_model.generate_content_async(prompt_to_send),
                     timeout=QUERY_TIMEOUT
@@ -157,7 +165,6 @@ class RpgCog(commands.Cog, name="Ferramentas de RPG"):
                 response_text = response.text
                 embed_title = f"Mestre Tatu responde sobre: {question.title()}"
 
-                # 6. Enviar a resposta, dividindo em múltiplos embeds se for longa
                 if len(response_text) <= 4096:
                     embed = discord.Embed(title=embed_title, description=response_text, color=discord.Color.blue())
                     embed.set_footer(text=f"Fonte: {source_text}")

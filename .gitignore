@@ -6,8 +6,6 @@ env
 # Secrets and sensitive files
 .env
 *.env
-cookies.txt
-src/cookies.txt
 src/logs
 src/rpg_books
 src/rpg_embeddings_cache.json
