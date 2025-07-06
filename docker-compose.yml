@@ -1,21 +1,16 @@
-# docker-compose.yml
-# This file uses the modern Docker Compose specification.
-# The top-level 'version' key is no longer required.
-
 services:
-  mestre-tatu:
-    # Build the Docker image from the Dockerfile in the current directory.
-    # The image will be tagged based on the directory name.
+  bot:
     build: .
-
-    # A friendly, predictable name for your container.
-    container_name: mestre-tatu-bot
-
-    # Ensures the bot restarts automatically if it crashes or the server reboots.
-    # 'unless-stopped' means it won't start on boot if you manually stopped it.
+    container_name: mestretatu-bot
     restart: unless-stopped
-
-    # Load environment variables (your secrets) from the .env file.
-    # Make sure your .env file is in the same directory as this file.
     env_file:
       - .env
+    volumes:
+      # This line maps your local code into the container for development
+      - ./src:/app/src
+      # This new line maps our persistent volume to the /app/data directory
+      - mestre-tatu-data:/app/data
+
+# This new section defines the named volume
+volumes:
+  mestre-tatu-data:
