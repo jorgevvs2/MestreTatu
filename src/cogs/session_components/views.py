@@ -12,6 +12,64 @@ def get_players(guild: discord.Guild) -> list[discord.Member]:
     player_role = discord.utils.find(lambda r: r.name.lower() == PLAYER_ROLE_NAME.lower(), guild.roles)
     return [m for m in guild.members if player_role and player_role in m.roles and not m.bot] if player_role else []
 
+
+class CampaignSelectorView(discord.ui.View):
+    """Uma View para selecionar a campanha ativa."""
+
+    def __init__(self, author: discord.Member, data_manager: SessionDataManager):
+        super().__init__(timeout=180)
+        self.author = author
+        self.data_manager = data_manager
+        self.message = None
+
+        campaigns = self.data_manager.get_campaigns_for_guild(author.guild.id)
+        if not campaigns:
+            return
+
+        options = []
+        for campaign in campaigns:
+            # Adiciona um emoji para indicar a campanha ativa no menu
+            label = f"✅ {campaign['name']}" if campaign['is_active'] else campaign['name']
+            options.append(
+                discord.SelectOption(label=label, value=str(campaign['id']), description=f"ID: {campaign['id']}"))
+
+        campaign_select_menu = discord.ui.Select(placeholder="Selecione a campanha a ser ativada...", options=options)
+        campaign_select_menu.callback = self.campaign_select_callback
+        self.add_item(campaign_select_menu)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Apenas quem iniciou o comando pode interagir.", ephemeral=True)
+            return False
+        return True
+
+    async def on_timeout(self):
+        if self.message:
+            for item in self.children:
+                item.disabled = True
+            await self.message.edit(view=self)
+
+    async def campaign_select_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        selected_campaign_id = int(self.children[0].values[0])
+
+        self.data_manager.set_active_campaign(interaction.guild.id, selected_campaign_id)
+
+        # Encontra o nome da campanha para a mensagem de confirmação
+        selected_campaign_name = ""
+        for option in self.children[0].options:
+            if int(option.value) == selected_campaign_id:
+                selected_campaign_name = option.label.replace("✅ ", "")  # Remove o emoji
+                break
+
+        embed = discord.Embed(
+            title="👑 Campanha Ativa Definida!",
+            description=f"A campanha **{selected_campaign_name}** agora é a ativa.\nTodos os comandos (`.log`, `.stats`, etc.) usarão os dados desta campanha.",
+            color=discord.Color.green()
+        )
+        await interaction.edit_original_response(embed=embed, view=None)
+
+
 class StatsSelectorView(discord.ui.View):
     """Uma View para selecionar um jogador e mostrar suas estatísticas totais."""
     def __init__(self, author: discord.Member, data_manager: SessionDataManager):
@@ -51,7 +109,7 @@ class StatsSelectorView(discord.ui.View):
             return
 
         stats = self.data_manager.get_player_total_stats(interaction.guild.id, player.display_name)
-        embed = discord.Embed(title=f"📊 Estatísticas Totais de {player.display_name}", color=player.color)
+        embed = discord.Embed(title=f"📊 Estatísticas de {player.display_name} na Campanha Ativa", color=player.color)
         embed.set_thumbnail(url=player.display_avatar.url)
         embed.add_field(name="⚔️ Dano Causado", value=f"`{stats['causado']}`", inline=True)
         embed.add_field(name="🛡️ Dano Recebido", value=f"`{stats['recebido']}`", inline=True)
@@ -105,6 +163,8 @@ class SessionStatsSelectorView(discord.ui.View):
         await interaction.response.defer()
         selected_session = int(self.children[0].values[0])
 
+        # NOTE: These methods in data_manager should be updated to accept a campaign_id
+        # to prevent data from different campaigns with the same session number from mixing up.
         session_info = self.data_manager.get_session_info(interaction.guild.id, selected_session)
         session_stats = self.data_manager.get_session_stats(interaction.guild.id, selected_session)
 
@@ -222,7 +282,7 @@ class SessionTrackerView(discord.ui.View):
         """Helper para criar a mensagem final de confirmação."""
         final_embed = discord.Embed(
             title="✅ Evento Registrado!",
-            description=f"A seguinte ação foi registrada para **{player.display_name}**:",
+            description=f"A seguinte ação foi registrada para **{player.display_name}** na campanha ativa:",
             color=discord.Color.green()
         )
         final_embed.add_field(name="Ação", value=action_text, inline=False)
@@ -249,7 +309,11 @@ class SessionTrackerView(discord.ui.View):
             return
 
         amount = int(message.content)
-        self.data_manager.log_event(interaction.guild.id, player, self.action_type, amount)
+        try:
+            self.data_manager.log_event(interaction.guild.id, player, self.action_type, amount)
+        except ValueError as e:
+            await interaction.edit_original_response(content=f"❌ Erro: {e}", embed=None, view=None)
+            return
 
         action_text_map = {
             "causado": f"⚔️ Dano Causado: `{amount}`",
@@ -270,7 +334,11 @@ class SessionTrackerView(discord.ui.View):
         player_id = int(self.player_select_menu.values[0])
         player = interaction.guild.get_member(player_id)
 
-        self.data_manager.log_event(interaction.guild.id, player, self.action_type, 1)
+        try:
+            self.data_manager.log_event(interaction.guild.id, player, self.action_type, 1)
+        except ValueError as e:
+            await interaction.edit_original_response(content=f"❌ Erro: {e}", embed=None, view=None)
+            return
 
         action_text_map = {
             "critico_sucesso": "✨ Acerto Crítico (20)",
