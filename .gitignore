@@ -9,6 +9,7 @@ env
 src/logs
 src/rpg_books
 src/rpg_embeddings_cache.json
+src/logs/rpg_questions_log.txt
 
 # Python cache and compiled files
 __pycache__/

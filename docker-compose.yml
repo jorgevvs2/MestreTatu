@@ -1,3 +1,5 @@
+# docker-compose.yml
+
 services:
   bot:
     build: .
@@ -5,12 +7,17 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    # --- CORREÇÃO AQUI ---
+    # Adiciona uma configuração de DNS para estabilizar a conexão com o Discord.
+    dns:
+      - 8.8.8.8 # DNS do Google
+      - 1.1.1.1 # DNS da Cloudflare
     volumes:
-      # This line maps your local code into the container for development
+      # Mapeamento do código-fonte (continua o mesmo)
       - ./src:/app/src
-      # This new line maps our persistent volume to the /app/data directory
-      - mestre-tatu-data:/app/src/logs/data
+      # CORREÇÃO: Mapeia a pasta local './data' para '/app/data' no container.
+      # Esta é a forma padrão e mais limpa de persistir dados.
+      - ./data:/app/data
 
-# This new section defines the named volume
-volumes:
-  mestre-tatu-data:
+# A seção de volumes nomeados não é mais necessária com o bind mount,
+# então ela foi removida.

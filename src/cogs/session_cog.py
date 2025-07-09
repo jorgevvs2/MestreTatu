@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 # --- ADIÇÃO AQUI ---
 # Define os caminhos do container que o DataManager usará
-DATA_DIR = '/app/src/logs/data'
+DATA_DIR = '/app/data'
 DB_FILE = os.path.join(DATA_DIR, 'stats.db')
 SESSION_DATA_FILE = os.path.join(DATA_DIR, 'session_data.json')
 

@@ -9,7 +9,7 @@ from src.cogs.session_components.database_setup import setup_database
 
 # --- Configuração ---
 # O caminho agora aponta para a pasta 'data', que é o volume do Docker
-DATA_DIR = 'src/logs/data'
+DATA_DIR = 'data'
 DB_PATH = os.path.join(DATA_DIR, 'stats.db')
 GUILD_ID = "1328755999582195772"  # ID de servidor de exemplo. Mude se quiser.
 CAMPAIGN_NAME = "Maldição de Strahd"
