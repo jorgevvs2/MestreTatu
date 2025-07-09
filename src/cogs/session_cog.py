@@ -1,4 +1,5 @@
 # src/cogs/session_cog.py
+import os
 
 import discord
 from discord.ext import commands
@@ -6,19 +7,25 @@ import logging
 import asyncio
 import sqlite3
 
-# Imports dos nossos componentes refatorados
-from .session_components.database_setup import DB_FILE, SESSION_DATA_FILE, setup_database
+# Importa apenas a função, não mais as constantes de caminho
+from .session_components.database_setup import setup_database
 from .session_components.data_manager import SessionDataManager
 from .session_components.views import (
     StatsSelectorView,
     SessionStatsSelectorView,
     SessionTrackerView,
-    CampaignSelectorView,  # Importa a nova View
+    CampaignSelectorView,
     get_players,
     PLAYER_ROLE_NAME
 )
 
 log = logging.getLogger(__name__)
+
+# --- ADIÇÃO AQUI ---
+# Define os caminhos do container que o DataManager usará
+DATA_DIR = '/app/src/logs/data'
+DB_FILE = os.path.join(DATA_DIR, 'stats.db')
+SESSION_DATA_FILE = os.path.join(DATA_DIR, 'session_data.json')
 
 
 class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
@@ -27,7 +34,7 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         # Garante que o banco de dados e os diretórios estão prontos
-        setup_database()
+        setup_database()  # Chama a função sem argumentos, usando o caminho padrão do container
         # Instancia o gerenciador de dados, que será nossa única fonte de verdade
         self.data_manager = SessionDataManager(db_path=DB_FILE, session_file_path=SESSION_DATA_FILE)
 
@@ -242,6 +249,32 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
         except Exception as e:
             log.error(f"Erro ao finalizar a sessão no cog: {e}", exc_info=True)
             await ctx.reply("Ocorreu um erro ao tentar salvar o resumo da sessão.")
+
+
+    # --- NOVO COMANDO AQUI ---
+    @commands.command(name='sessionresume', aliases=['resumo'], help='Mostra um resumo de todas as sessões da campanha ativa.')
+    @commands.guild_only()
+    async def session_resume(self, ctx: commands.Context):
+        """Exibe um resumo de todas as sessões salvas para a campanha ativa."""
+        if not self.data_manager.get_active_campaign_id(ctx.guild.id):
+            await ctx.reply("⚠️ Nenhuma campanha ativa! Use `.setcampaign` para definir uma antes de ver o resumo.")
+            return
+
+        summaries = self.data_manager.get_all_session_summaries(ctx.guild.id)
+
+        if not summaries:
+            await ctx.reply("📜 Nenhum resumo de sessão foi encontrado para a campanha ativa. Use `.endsession` para criar um!")
+            return
+
+        await ctx.send(f"📖 **Crônicas da Campanha Ativa**\nAqui está o resumo de todas as sessões registradas:")
+
+        for summary in summaries:
+            embed = discord.Embed(
+                title=f"Sessão {summary['session_number']}: {summary['title']}",
+                description=summary['description'],
+                color=discord.Color.dark_gold()
+            )
+            await ctx.send(embed=embed)
 
 
 async def setup(bot: commands.Bot):

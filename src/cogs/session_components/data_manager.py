@@ -205,3 +205,28 @@ class SessionDataManager:
             if row:
                 info = dict(row)
         return info
+
+
+    # --- NOVO MÉTODO AQUI ---
+    def get_all_session_summaries(self, guild_id: int) -> list[sqlite3.Row]:
+        """
+        Busca os resumos (número, título, descrição) de TODAS as sessões de uma campanha ativa,
+        ordenados pelo número da sessão.
+        """
+        active_campaign_id = self.get_active_campaign_id(guild_id)
+        if not active_campaign_id:
+            return []
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT session_number, title, description
+                FROM sessions
+                WHERE guild_id = ? AND campaign_id = ?
+                ORDER BY session_number ASC
+                """,
+                (str(guild_id), active_campaign_id)
+            )
+            return cursor.fetchall()

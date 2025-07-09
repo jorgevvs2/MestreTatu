@@ -6,153 +6,68 @@ import os
 
 log = logging.getLogger(__name__)
 
-# O caminho para o volume do Docker permanece o mesmo
-DATA_DIR = '/app/data'
-DB_FILE = os.path.join(DATA_DIR, 'stats.db')
-SESSION_DATA_FILE = os.path.join(DATA_DIR, 'session_data.json')  # Agora vai guardar a campanha ativa
+# As constantes de caminho foram movidas para dentro da função para permitir
+# que ela seja usada com caminhos diferentes fora do container.
 
+def setup_database(base_dir: str | None = None):
+    """
+    Garante que o diretório de dados e as tabelas do banco de dados existam.
+    Pode receber um diretório base para ser usado fora do container (ex: para scripts).
+    """
+    # Define o diretório de dados. Usa o padrão do container se nenhum for fornecido.
+    data_dir = base_dir if base_dir is not None else '/app/data'
+    db_file = os.path.join(data_dir, 'stats.db')
 
-def setup_database():
-    """Garante que o diretório de dados e as tabelas do banco de dados existam."""
     try:
-        os.makedirs(DATA_DIR, exist_ok=True)
+        os.makedirs(data_dir, exist_ok=True)
 
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(db_file) as conn:
             cursor = conn.cursor()
 
             # Habilita foreign keys para garantir a integridade dos dados (ex: ON DELETE CASCADE)
             cursor.execute("PRAGMA foreign_keys = ON;")
 
             # --- TABELA DE CAMPANHAS SIMPLIFICADA ---
-            # Armazena todas as campanhas e qual está ativa por servidor.
-            # A coluna 'description' foi removida.
             cursor.execute('''
-                           CREATE TABLE IF NOT EXISTS campaigns
-                           (
-                               id
-                               INTEGER
-                               PRIMARY
-                               KEY
-                               AUTOINCREMENT,
-                               guild_id
-                               TEXT
-                               NOT
-                               NULL,
-                               name
-                               TEXT
-                               NOT
-                               NULL,
-                               is_active
-                               INTEGER
-                               NOT
-                               NULL
-                               DEFAULT
-                               0, -- 1 para True, 0 para False
-                               UNIQUE
-                           (
-                               guild_id,
-                               name
-                           )
-                               )
-                           ''')
+                CREATE TABLE IF NOT EXISTS campaigns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    is_active INTEGER NOT NULL DEFAULT 0, -- 1 para True, 0 para False
+                    UNIQUE(guild_id, name)
+                )
+            ''')
 
             # --- TABELA MODIFICADA: session_stats ---
-            # Adicionamos a coluna campaign_id para vincular cada log a uma campanha.
-            # ON DELETE CASCADE garante que, se uma campanha for deletada, seus logs também serão.
             cursor.execute('''
-                           CREATE TABLE IF NOT EXISTS session_stats
-                           (
-                               id
-                               INTEGER
-                               PRIMARY
-                               KEY
-                               AUTOINCREMENT,
-                               campaign_id
-                               INTEGER
-                               NOT
-                               NULL,
-                               timestamp
-                               TEXT
-                               NOT
-                               NULL,
-                               guild_id
-                               TEXT
-                               NOT
-                               NULL,
-                               session_number
-                               INTEGER
-                               NOT
-                               NULL,
-                               player_name
-                               TEXT
-                               NOT
-                               NULL,
-                               action
-                               TEXT
-                               NOT
-                               NULL,
-                               amount
-                               INTEGER
-                               NOT
-                               NULL,
-                               FOREIGN
-                               KEY
-                           (
-                               campaign_id
-                           ) REFERENCES campaigns
-                           (
-                               id
-                           ) ON DELETE CASCADE
-                               )
-                           ''')
+                CREATE TABLE IF NOT EXISTS session_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    campaign_id INTEGER NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    guild_id TEXT NOT NULL,
+                    session_number INTEGER NOT NULL,
+                    player_name TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    amount INTEGER NOT NULL,
+                    FOREIGN KEY (campaign_id) REFERENCES campaigns (id) ON DELETE CASCADE
+                )
+            ''')
 
             # --- TABELA MODIFICADA: sessions ---
-            # Adicionamos a coluna campaign_id para vincular cada resumo de sessão a uma campanha.
-            # ON DELETE CASCADE garante que, se uma campanha for deletada, seus resumos de sessão também serão.
             cursor.execute('''
-                           CREATE TABLE IF NOT EXISTS sessions
-                           (
-                               id
-                               INTEGER
-                               PRIMARY
-                               KEY
-                               AUTOINCREMENT,
-                               campaign_id
-                               INTEGER
-                               NOT
-                               NULL,
-                               guild_id
-                               TEXT
-                               NOT
-                               NULL,
-                               session_number
-                               INTEGER
-                               NOT
-                               NULL,
-                               title
-                               TEXT,
-                               description
-                               TEXT,
-                               end_timestamp
-                               TEXT
-                               NOT
-                               NULL,
-                               UNIQUE
-                           (
-                               guild_id,
-                               campaign_id,
-                               session_number
-                           ),
-                               FOREIGN KEY
-                           (
-                               campaign_id
-                           ) REFERENCES campaigns
-                           (
-                               id
-                           ) ON DELETE CASCADE
-                               )
-                           ''')
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    campaign_id INTEGER NOT NULL,
+                    guild_id TEXT NOT NULL,
+                    session_number INTEGER NOT NULL,
+                    title TEXT,
+                    description TEXT,
+                    end_timestamp TEXT NOT NULL,
+                    UNIQUE(guild_id, campaign_id, session_number),
+                    FOREIGN KEY (campaign_id) REFERENCES campaigns (id) ON DELETE CASCADE
+                )
+            ''')
 
-        log.info(f"Banco de dados '{DB_FILE}' verificado/criado com suporte a múltiplas campanhas.")
+        log.info(f"Banco de dados '{db_file}' verificado/criado com suporte a múltiplas campanhas.")
     except Exception as e:
-        log.error(f"Falha ao inicializar o banco de dados em '{DB_FILE}': {e}", exc_info=True)
+        log.error(f"Falha ao inicializar o banco de dados em '{db_file}': {e}", exc_info=True)

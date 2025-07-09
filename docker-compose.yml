@@ -9,7 +9,7 @@ services:
       # This line maps your local code into the container for development
       - ./src:/app/src
       # This new line maps our persistent volume to the /app/data directory
-      - mestre-tatu-data:/app/data
+      - mestre-tatu-data:/app/src/logs/data
 
 # This new section defines the named volume
 volumes:
