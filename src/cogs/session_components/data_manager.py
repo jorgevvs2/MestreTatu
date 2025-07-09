@@ -21,12 +21,13 @@ class SessionDataManager:
 
     # --- Gerenciamento de Campanha ---
 
-    def create_campaign(self, guild_id: int, name: str| None = None):
-        """Cria uma nova campanha no banco de dados para um servidor."""
+    def create_campaign(self, guild_id: int, name: str):
+        """Cria uma nova campanha no banco de dados para um servidor, apenas com o nome."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            # A coluna 'description' foi removida da tabela.
             cursor.execute(
-                "INSERT INTO campaigns (guild_id, name, description) VALUES (?, ?, ?)",
+                "INSERT INTO campaigns (guild_id, name) VALUES (?, ?)",
                 (str(guild_id), name)
             )
 
@@ -170,72 +171,37 @@ class SessionDataManager:
             """, (active_campaign_id, str(guild_id), session_number, title, description, timestamp))
 
     def get_session_stats(self, guild_id: int, session_number: int) -> defaultdict:
-        """Busca as estatísticas de uma sessão específica do banco de dados."""
+        """Busca as estatísticas de uma sessão específica da campanha ativa."""
+        active_campaign_id = self.get_active_campaign_id(guild_id)
+        if not active_campaign_id:
+            return defaultdict(lambda: defaultdict(int))
+
         session_stats = defaultdict(lambda: defaultdict(int))
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT player_name, action, SUM(amount) FROM session_stats WHERE guild_id = ? AND session_number = ? GROUP BY player_name, action",
-                    (str(guild_id), session_number)
-                )
-                for player_name, action, total_amount in cursor.fetchall():
-                    session_stats[player_name][action] = total_amount
-        except Exception as e:
-            log.error(f"Erro ao buscar estatísticas da sessão {session_number}: {e}", exc_info=True)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT player_name, action, SUM(amount) FROM session_stats WHERE guild_id = ? AND campaign_id = ? AND session_number = ? GROUP BY player_name, action",
+                (str(guild_id), active_campaign_id, session_number)
+            )
+            for player_name, action, total_amount in cursor.fetchall():
+                session_stats[player_name][action] = total_amount
         return session_stats
 
     def get_session_info(self, guild_id: int, session_number: int) -> dict:
-        """Busca o título e a descrição de uma sessão específica."""
+        """Busca o título e a descrição de uma sessão específica da campanha ativa."""
+        active_campaign_id = self.get_active_campaign_id(guild_id)
+        if not active_campaign_id:
+            return {}
+
         info = {}
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT title, description FROM sessions WHERE guild_id = ? AND session_number = ?",
-                    (str(guild_id), session_number)
-                )
-                row = cursor.fetchone()
-                if row:
-                    info = dict(row)
-        except Exception as e:
-            log.error(f"Erro ao buscar informações da sessão {session_number}: {e}", exc_info=True)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT title, description FROM sessions WHERE guild_id = ? AND campaign_id = ? AND session_number = ?",
+                (str(guild_id), active_campaign_id, session_number)
+            )
+            row = cursor.fetchone()
+            if row:
+                info = dict(row)
         return info
-
-    def get_mvps(self, guild_id: int) -> dict[str, list]:
-        """Compila estatísticas do banco de dados e retorna os recordistas."""
-        mvps = {}
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                actions = ["causado", "recebido", "cura", "eliminacao", "jogador_caido", "critico_sucesso", "critico_falha"]
-                for action in actions:
-                    cursor.execute("""
-                        SELECT player_name, SUM(amount) as total
-                        FROM session_stats
-                        WHERE guild_id = ? AND action = ?
-                        GROUP BY player_name
-                        ORDER BY total DESC
-                    """, (str(guild_id), action))
-                    results = cursor.fetchall()
-                    if results and results[0][1] > 0:
-                        top_score = results[0][1]
-                        mvps[action] = ([row[0] for row in results if row[1] == top_score], top_score)
-        except Exception as e:
-            log.error(f"Erro ao gerar MVPs: {e}", exc_info=True)
-        return mvps
-
-    def end_session(self, guild_id: int, session_number: int, title: str, description: str):
-        """Salva um resumo da sessão atual no banco de dados."""
-        timestamp = datetime.utcnow().isoformat()
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT OR REPLACE INTO sessions (guild_id, session_number, title, description, end_timestamp)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (str(guild_id), session_number, title, description, timestamp))
-        except Exception as e:
-            log.error(f"Erro ao finalizar a sessão {session_number}: {e}", exc_info=True)
-            raise  # Re-levanta a exceção para ser tratada no cog

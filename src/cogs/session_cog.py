@@ -36,18 +36,26 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
     @commands.command(name='createcampaign', help='Cria uma nova campanha ou one-shot.')
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
-    async def create_campaign(self, ctx: commands.Context, * name: str ):
-        """Cria uma nova campanha para o servidor. Use aspas para nomes com espaços."""
+    # --- CORREÇÃO AQUI ---
+    # Alterado de `*name: str` para `*, name: str`.
+    # Isso garante que `name` seja uma única string, mesmo que contenha espaços.
+    async def create_campaign(self, ctx: commands.Context, *, name: str):
+        """Cria uma nova campanha para o servidor. O nome pode conter espaços."""
+        campaign_name = name.strip()
+        if not campaign_name:
+            await ctx.reply("❌ Erro: Você precisa fornecer um nome para a campanha.")
+            return
+
         try:
-            self.data_manager.create_campaign(ctx.guild.id, name)
+            self.data_manager.create_campaign(ctx.guild.id, campaign_name)
             embed = discord.Embed(
                 title="🗺️ Nova Campanha Criada!",
-                description=f"A campanha **{name}** foi criada com sucesso.\nUse `.setcampaign` para ativá-la.",
+                description=f"A campanha **{campaign_name}** foi criada com sucesso.\nUse `.setcampaign` para ativá-la.",
                 color=discord.Color.blue()
             )
             await ctx.reply(embed=embed)
         except sqlite3.IntegrityError:
-            await ctx.reply(f"❌ Erro: Uma campanha com o nome '{name}' já existe neste servidor.")
+            await ctx.reply(f"❌ Erro: Uma campanha com o nome '{campaign_name}' já existe neste servidor.")
         except Exception as e:
             log.error(f"Erro ao criar campanha: {e}", exc_info=True)
             await ctx.reply("Ocorreu um erro inesperado ao criar a campanha.")
