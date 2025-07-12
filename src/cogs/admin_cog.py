@@ -4,17 +4,26 @@ import discord
 from discord.ext import commands
 import sqlite3
 import logging
+import os
 from datetime import datetime
 
 log = logging.getLogger(__name__)
+
+# --- A CORREÇÃO PRINCIPAL ---
+# Define os caminhos do banco de dados de forma consistente,
+# exatamente como no session_cog.py, para garantir que o cog
+# encontre o arquivo no local correto dentro do container.
+DATA_DIR = '/app/data'
+DB_FILE = os.path.join(DATA_DIR, 'stats.db')
+
 
 class AdminCog(commands.Cog, name="Administração"):
     """Comandos para o gerenciamento do bot e seus dados."""
 
     def __init__(self, bot):
         self.bot = bot
-        # --- CORREÇÃO: Usar o caminho absoluto para o volume ---
-        self.db_path = '/data/stats.db'
+        # A propriedade db_path agora usa a constante correta.
+        self.db_path = DB_FILE
 
     @commands.command(name='sessionlogs', help='Lista todos os logs de uma sessão específica. (Dono do bot)')
     @commands.is_owner()
@@ -23,7 +32,13 @@ class AdminCog(commands.Cog, name="Administração"):
         Busca e exibe todas as entradas de log associadas a um ID de sessão.
         Cada entrada terá um ID único para permitir a sua exclusão.
         """
+        # Adiciona uma verificação para garantir que o arquivo de DB existe antes de tentar conectar
+        if not os.path.exists(self.db_path):
+            await ctx.send(f"❌ Erro: O arquivo de banco de dados não foi encontrado em `{self.db_path}`.")
+            return
+
         try:
+            # A conexão agora usa o caminho correto e consistente
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row  # Permite acessar colunas por nome
             cursor = conn.cursor()
@@ -36,7 +51,8 @@ class AdminCog(commands.Cog, name="Administração"):
             logs_data = cursor.fetchall()
 
             if not logs_data:
-                await ctx.send(f"Nenhum log encontrado para a sessão `{session_id}`. Verifique se o ID da sessão está correto.")
+                await ctx.send(
+                    f"Nenhum log encontrado para a sessão `{session_id}`. Verifique se o ID da sessão está correto.")
                 return
 
             # Usa o paginador do discord.py para lidar com listas longas de forma limpa
@@ -59,7 +75,7 @@ class AdminCog(commands.Cog, name="Administração"):
                 await ctx.send(page)
 
         except sqlite3.Error as e:
-            log.error(f"Erro de banco de dados no comando sessionlogs: {e}")
+            log.error(f"Erro de banco de dados no comando sessionlogs: {e}", exc_info=True)
             await ctx.send(f"🔥 Ocorreu um erro no banco de dados: {e}")
         finally:
             if 'conn' in locals() and conn:
@@ -88,7 +104,7 @@ class AdminCog(commands.Cog, name="Administração"):
             await ctx.send(f"✅ Sucesso! A entrada de log com ID `{log_id}` foi permanentemente deletada.")
 
         except sqlite3.Error as e:
-            log.error(f"Erro de banco de dados no comando dellog: {e}")
+            log.error(f"Erro de banco de dados no comando dellog: {e}", exc_info=True)
             await ctx.send(f"🔥 Ocorreu um erro no banco de dados: {e}")
         finally:
             if 'conn' in locals() and conn:

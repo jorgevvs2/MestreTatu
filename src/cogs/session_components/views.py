@@ -3,9 +3,12 @@
 import discord
 from discord.ext import commands
 import asyncio
+import logging
 from .data_manager import SessionDataManager
 
+log = logging.getLogger(__name__)
 PLAYER_ROLE_NAME = "Aventureiro"  # Mantemos a constante aqui para as Views
+
 
 def get_players(guild: discord.Guild) -> list[discord.Member]:
     """Helper para pegar membros com o cargo de jogador."""
@@ -72,6 +75,7 @@ class CampaignSelectorView(discord.ui.View):
 
 class StatsSelectorView(discord.ui.View):
     """Uma View para selecionar um jogador e mostrar suas estatísticas totais."""
+
     def __init__(self, author: discord.Member, data_manager: SessionDataManager):
         super().__init__(timeout=180)
         self.author = author
@@ -125,6 +129,7 @@ class StatsSelectorView(discord.ui.View):
 
 class SessionStatsSelectorView(discord.ui.View):
     """Uma View para selecionar uma sessão e mostrar seus detalhes."""
+
     def __init__(self, author: discord.Member, data_manager: SessionDataManager):
         super().__init__(timeout=180)
         self.author = author
@@ -182,7 +187,8 @@ class SessionStatsSelectorView(discord.ui.View):
                 "critico_sucesso": "Críticos (20)", "critico_falha": "Falhas (1)"
             }
             for player, stats in sorted(session_stats.items()):
-                player_lines = [f"• {friendly_name}: `{stats[action]}`" for action, friendly_name in action_names.items() if stats.get(action, 0) > 0]
+                player_lines = [f"• {friendly_name}: `{stats[action]}`" for action, friendly_name in
+                                action_names.items() if stats.get(action, 0) > 0]
                 player_summary = "\n".join(player_lines) if player_lines else "Nenhuma atividade registrada."
                 embed.add_field(name=f"👤 {player}", value=player_summary, inline=False)
 
@@ -191,6 +197,7 @@ class SessionStatsSelectorView(discord.ui.View):
 
 class SessionTrackerView(discord.ui.View):
     """Uma View interativa para registrar eventos de sessão."""
+
     def __init__(self, author: discord.Member, bot: commands.Bot, data_manager: SessionDataManager):
         super().__init__(timeout=180)
         self.author = author
@@ -279,15 +286,29 @@ class SessionTrackerView(discord.ui.View):
         await self._prompt_for_player(interaction, "Um inimigo foi **eliminado**. Selecione o jogador responsável:")
 
     async def _finalize_log(self, interaction: discord.Interaction, player: discord.Member, action_text: str):
-        """Helper para criar a mensagem final de confirmação."""
+        """Helper para criar a mensagem final de confirmação, tratando interações expiradas."""
         final_embed = discord.Embed(
             title="✅ Evento Registrado!",
             description=f"A seguinte ação foi registrada para **{player.display_name}** na campanha ativa:",
             color=discord.Color.green()
         )
         final_embed.add_field(name="Ação", value=action_text, inline=False)
-        await interaction.edit_original_response(embed=final_embed, view=None)
-        self.stop()
+
+        try:
+            # Tenta editar a resposta original, que é o comportamento padrão.
+            await interaction.edit_original_response(embed=final_embed, view=None)
+        except discord.errors.NotFound:
+            # Se o token da interação expirou (>15 min), a edição falha.
+            # Enviamos uma nova mensagem como "follow-up" para o usuário que iniciou.
+            log.warning(
+                f"Token de interação para o log de {interaction.user} expirou. Enviando mensagem de acompanhamento.")
+            try:
+                await interaction.followup.send(embed=final_embed, ephemeral=True)
+            except discord.HTTPException as e:
+                log.error(f"Falha ao enviar mensagem de acompanhamento após interação expirada: {e}")
+        finally:
+            # Garante que a view seja parada para não aceitar mais interações.
+            self.stop()
 
     async def player_select_amount_callback(self, interaction: discord.Interaction):
         self.player_select_menu.disabled = True
@@ -301,7 +322,8 @@ class SessionTrackerView(discord.ui.View):
         try:
             message = await self.bot.wait_for(
                 "message", timeout=60.0,
-                check=lambda m: m.author == interaction.user and m.channel == interaction.channel and m.content.isdigit()
+                check=lambda
+                    m: m.author == interaction.user and m.channel == interaction.channel and m.content.isdigit()
             )
         except asyncio.TimeoutError:
             await interaction.followup.send("Tempo esgotado. O registro foi cancelado.", ephemeral=True)
