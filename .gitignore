@@ -32,3 +32,4 @@ discord.log
 # Cache files (e.g., from spotipy)
 .cache
 src/.cache
+data
