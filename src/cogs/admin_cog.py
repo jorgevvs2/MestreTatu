@@ -9,10 +9,7 @@ from datetime import datetime
 
 log = logging.getLogger(__name__)
 
-# --- A CORREÇÃO PRINCIPAL ---
-# Define os caminhos do banco de dados de forma consistente,
-# exatamente como no session_cog.py, para garantir que o cog
-# encontre o arquivo no local correto dentro do container.
+# Define os caminhos do banco de dados de forma consistente
 DATA_DIR = '/app/data'
 DB_FILE = os.path.join(DATA_DIR, 'stats.db')
 
@@ -22,42 +19,51 @@ class AdminCog(commands.Cog, name="Administração"):
 
     def __init__(self, bot):
         self.bot = bot
-        # A propriedade db_path agora usa a constante correta.
         self.db_path = DB_FILE
 
-    @commands.command(name='sessionlogs', help='Lista todos os logs de uma sessão específica. (Dono do bot)')
+    @commands.command(name='sessionlogs', help='Lista os logs de uma sessão da campanha ativa. (Dono do bot)')
     @commands.is_owner()
     async def session_logs(self, ctx: commands.Context, session_id: int):
         """
-        Busca e exibe todas as entradas de log associadas a um ID de sessão.
-        Cada entrada terá um ID único para permitir a sua exclusão.
+        Busca e exibe todas as entradas de log associadas a um ID de sessão
+        da campanha atualmente ativa.
         """
-        # Adiciona uma verificação para garantir que o arquivo de DB existe antes de tentar conectar
         if not os.path.exists(self.db_path):
             await ctx.send(f"❌ Erro: O arquivo de banco de dados não foi encontrado em `{self.db_path}`.")
             return
 
         try:
-            # A conexão agora usa o caminho correto e consistente
             conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row  # Permite acessar colunas por nome
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            # Busca os logs da sessão, ordenados pelo ID de inserção (ordem cronológica)
+            # --- CORREÇÃO AQUI: Buscar o ID da campanha ativa primeiro ---
             cursor.execute(
-                "SELECT id, timestamp, player_name, action, amount FROM session_stats WHERE guild_id = ? AND session_number = ? ORDER BY id ASC",
-                (str(ctx.guild.id), session_id)
+                "SELECT id FROM campaigns WHERE guild_id = ? AND is_active = 1",
+                (str(ctx.guild.id),)
+            )
+            active_campaign_row = cursor.fetchone()
+
+            if not active_campaign_row:
+                await ctx.send("⚠️ Nenhuma campanha ativa! Use `.setcampaign` para definir uma antes de ver os logs.")
+                return
+
+            active_campaign_id = active_campaign_row['id']
+
+            # --- CORREÇÃO AQUI: Adicionar o filtro de campaign_id na query ---
+            cursor.execute(
+                "SELECT id, timestamp, player_name, action, amount FROM session_stats WHERE guild_id = ? AND campaign_id = ? AND session_number = ? ORDER BY id ASC",
+                (str(ctx.guild.id), active_campaign_id, session_id)
             )
             logs_data = cursor.fetchall()
 
             if not logs_data:
                 await ctx.send(
-                    f"Nenhum log encontrado para a sessão `{session_id}`. Verifique se o ID da sessão está correto.")
+                    f"Nenhum log encontrado para a sessão `{session_id}` na campanha ativa. Verifique se o ID da sessão está correto.")
                 return
 
-            # Usa o paginador do discord.py para lidar com listas longas de forma limpa
             paginator = commands.Paginator(prefix='', suffix='', max_size=2000)
-            paginator.add_line(f"**📜 Logs da Sessão `{session_id}`**\n---")
+            paginator.add_line(f"**📜 Logs da Sessão `{session_id}` (Campanha Ativa)**\n---")
 
             for row in logs_data:
                 action_text = row['action'].replace('_', ' ').title()
@@ -70,7 +76,6 @@ class AdminCog(commands.Cog, name="Administração"):
                 )
                 paginator.add_line(log_line)
 
-            # Envia as páginas para o usuário
             for page in paginator.pages:
                 await ctx.send(page)
 

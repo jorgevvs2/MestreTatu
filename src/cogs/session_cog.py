@@ -38,7 +38,92 @@ class SessionCog(commands.Cog, name="Estatísticas de Sessão"):
         # Instancia o gerenciador de dados, que será nossa única fonte de verdade
         self.data_manager = SessionDataManager(db_path=DB_FILE, session_file_path=SESSION_DATA_FILE)
 
+
+    @commands.command(name='addplayer', help='Adiciona um personagem à campanha ativa.')
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    async def add_player(self, ctx: commands.Context, *, character_name: str):
+        """Adiciona um personagem (jogador) à lista fixa da campanha ativa."""
+        try:
+            self.data_manager.add_player_to_campaign(ctx.guild.id, character_name.strip())
+            await ctx.reply(f"✅ Personagem **{character_name.strip()}** adicionado com sucesso à campanha ativa!")
+        except ValueError as e:
+            await ctx.reply(f"⚠️ {e}")
+        except sqlite3.IntegrityError:
+            await ctx.reply(f"❌ O personagem **{character_name.strip()}** já existe nesta campanha.")
+        except Exception as e:
+            log.error(f"Erro ao adicionar personagem: {e}", exc_info=True)
+            await ctx.reply("Ocorreu um erro inesperado.")
+
+    @commands.command(name='delplayer', help='Remove um personagem da campanha ativa.')
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    async def del_player(self, ctx: commands.Context, *, character_name: str):
+        """Remove um personagem da lista fixa da campanha ativa."""
+        try:
+            rows_affected = self.data_manager.remove_player_from_campaign(ctx.guild.id, character_name.strip())
+            if rows_affected > 0:
+                await ctx.reply(f"✅ Personagem **{character_name.strip()}** removido com sucesso da campanha ativa.")
+            else:
+                await ctx.reply(f"🤔 Personagem **{character_name.strip()}** não encontrado na campanha ativa.")
+        except ValueError as e:
+            await ctx.reply(f"⚠️ {e}")
+        except Exception as e:
+            log.error(f"Erro ao remover personagem: {e}", exc_info=True)
+            await ctx.reply("Ocorreu um erro inesperado.")
+
+    @commands.command(name='listplayers', aliases=['players'], help='Lista os personagens da campanha ativa.')
+    @commands.guild_only()
+    async def list_players(self, ctx: commands.Context):
+        """Exibe a lista de todos os personagens registrados na campanha ativa."""
+        try:
+            players = self.data_manager.get_players_for_campaign(ctx.guild.id)
+            if not players:
+                await ctx.reply("Nenhum personagem foi adicionado à campanha ativa ainda. Use `.addplayer <nome>`.")
+                return
+
+            embed = discord.Embed(
+                title="👥 Personagens da Campanha Ativa",
+                description="\n".join(f"• {player}" for player in players),
+                color=discord.Color.blue()
+            )
+            await ctx.reply(embed=embed)
+        except Exception as e:
+            log.error(f"Erro ao listar personagens: {e}", exc_info=True)
+            await ctx.reply("Ocorreu um erro inesperado.")
+
     # --- Comandos de Gerenciamento de Campanha ---
+
+    @commands.command(name='listcampaigns', aliases=['campaigns'], help='Lista todas as campanhas do servidor.')
+    @commands.guild_only()
+    async def list_campaigns(self, ctx: commands.Context):
+        """Exibe uma lista de todas as campanhas criadas neste servidor, destacando a ativa."""
+        try:
+            campaigns = self.data_manager.get_campaigns_for_guild(ctx.guild.id)
+
+            if not campaigns:
+                await ctx.reply("Nenhuma campanha foi criada neste servidor ainda. Use `.createcampaign <nome>` para começar.")
+                return
+
+            description_lines = []
+            for campaign in campaigns:
+                # Adiciona um marcador na campanha ativa para fácil identificação
+                if campaign['is_active']:
+                    description_lines.append(f"✅ **{campaign['name']}** (ID: `{campaign['id']}`) - *Ativa*")
+                else:
+                    description_lines.append(f"🔹 {campaign['name']} (ID: `{campaign['id']}`)")
+
+            embed = discord.Embed(
+                title="🗺️ Campanhas do Servidor",
+                description="\n".join(description_lines),
+                color=discord.Color.dark_teal()
+            )
+            embed.set_footer(text="Use .setcampaign para mudar a campanha ativa.")
+            await ctx.reply(embed=embed)
+
+        except Exception as e:
+            log.error(f"Erro ao listar campanhas: {e}", exc_info=True)
+            await ctx.reply("Ocorreu um erro inesperado ao buscar as campanhas.")
 
     @commands.command(name='createcampaign', help='Cria uma nova campanha ou one-shot.')
     @commands.guild_only()

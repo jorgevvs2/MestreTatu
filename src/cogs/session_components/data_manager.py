@@ -84,7 +84,8 @@ class SessionDataManager:
 
     # --- Lógica de Eventos (Agora filtrada por Campanha Ativa) ---
 
-    def log_event(self, guild_id: int, player: discord.Member, action: str, amount: int):
+    def log_event(self, guild_id: int, player_name: str, action: str, amount: int):
+        """Registra um evento para um personagem (pelo nome) na campanha ativa."""
         active_campaign_id = self.get_active_campaign_id(guild_id)
         if not active_campaign_id:
             raise ValueError("Nenhuma campanha ativa definida para este servidor.")
@@ -95,9 +96,9 @@ class SessionDataManager:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO session_stats (campaign_id, timestamp, guild_id, session_number, player_name, action, amount) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (active_campaign_id, timestamp, str(guild_id), session_number, player.display_name, action, amount)
+                (active_campaign_id, timestamp, str(guild_id), session_number, player_name, action, amount)
             )
-        log.info(f"Log registrado para Campanha {active_campaign_id} por {player.display_name}: {action} - {amount}")
+        log.info(f"Log registrado para Campanha {active_campaign_id} por {player_name}: {action} - {amount}")
 
     def get_player_total_stats(self, guild_id: int, player_name: str) -> defaultdict:
         active_campaign_id = self.get_active_campaign_id(guild_id)
@@ -206,6 +207,48 @@ class SessionDataManager:
                 info = dict(row)
         return info
 
+    def add_player_to_campaign(self, guild_id: int, character_name: str):
+        """Adiciona um personagem à campanha ativa do servidor."""
+        active_campaign_id = self.get_active_campaign_id(guild_id)
+        if not active_campaign_id:
+            raise ValueError("Nenhuma campanha ativa definida para este servidor.")
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO campaign_players (campaign_id, guild_id, character_name) VALUES (?, ?, ?)",
+                (active_campaign_id, str(guild_id), character_name)
+            )
+            log.info(f"Personagem '{character_name}' adicionado à campanha {active_campaign_id}.")
+
+    def remove_player_from_campaign(self, guild_id: int, character_name: str) -> int:
+        """Remove um personagem da campanha ativa. Retorna o número de linhas afetadas."""
+        active_campaign_id = self.get_active_campaign_id(guild_id)
+        if not active_campaign_id:
+            raise ValueError("Nenhuma campanha ativa definida para este servidor.")
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM campaign_players WHERE campaign_id = ? AND character_name = ?",
+                (active_campaign_id, character_name)
+            )
+            log.info(f"Tentativa de remover '{character_name}' da campanha {active_campaign_id}.")
+            return cursor.rowcount
+
+    def get_players_for_campaign(self, guild_id: int) -> list[str]:
+        """Retorna uma lista com os nomes dos personagens da campanha ativa."""
+        active_campaign_id = self.get_active_campaign_id(guild_id)
+        if not active_campaign_id:
+            return []
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT character_name FROM campaign_players WHERE campaign_id = ? ORDER BY character_name",
+                (active_campaign_id,)
+            )
+            return [row[0] for row in cursor.fetchall()]
 
     # --- NOVO MÉTODO AQUI ---
     def get_all_session_summaries(self, guild_id: int) -> list[sqlite3.Row]:

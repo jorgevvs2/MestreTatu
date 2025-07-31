@@ -7,11 +7,12 @@ import logging
 from .data_manager import SessionDataManager
 
 log = logging.getLogger(__name__)
-PLAYER_ROLE_NAME = "Aventureiro"  # Mantemos a constante aqui para as Views
+# Esta constante agora é usada apenas pelo comando .stats, que ainda se baseia em cargos.
+PLAYER_ROLE_NAME = "Aventureiro"
 
 
 def get_players(guild: discord.Guild) -> list[discord.Member]:
-    """Helper para pegar membros com o cargo de jogador."""
+    """Helper para pegar membros com o cargo de jogador para o comando .stats."""
     player_role = discord.utils.find(lambda r: r.name.lower() == PLAYER_ROLE_NAME.lower(), guild.roles)
     return [m for m in guild.members if player_role and player_role in m.roles and not m.bot] if player_role else []
 
@@ -168,8 +169,6 @@ class SessionStatsSelectorView(discord.ui.View):
         await interaction.response.defer()
         selected_session = int(self.children[0].values[0])
 
-        # NOTE: These methods in data_manager should be updated to accept a campaign_id
-        # to prevent data from different campaigns with the same session number from mixing up.
         session_info = self.data_manager.get_session_info(interaction.guild.id, selected_session)
         session_stats = self.data_manager.get_session_stats(interaction.guild.id, selected_session)
 
@@ -221,18 +220,21 @@ class SessionTrackerView(discord.ui.View):
                 item.disabled = True
 
     async def _prompt_for_player(self, interaction: discord.Interaction, prompt_text: str):
-        players = get_players(interaction.guild)
+        # Busca a lista de personagens da campanha ativa.
+        players = self.data_manager.get_players_for_campaign(interaction.guild.id)
+
         if not players:
             error_embed = self._create_embed(
-                f"⚠️ **Cargo não encontrado!**\n\nNão encontrei nenhum membro com o cargo **'{PLAYER_ROLE_NAME}'**.\n\nCrie o cargo e atribua-o aos jogadores para continuar.",
+                f"⚠️ **Nenhum Personagem Encontrado!**\n\nNão encontrei personagens registrados para a campanha ativa.\n\nUse o comando `.addplayer <nome do personagem>` para adicioná-los.",
                 color=discord.Color.red()
             )
             await interaction.response.edit_message(embed=error_embed, view=None)
             self.stop()
             return
 
-        options = [discord.SelectOption(label=player.display_name, value=str(player.id)) for player in players]
-        self.player_select_menu = discord.ui.Select(placeholder="Selecione o jogador...", options=options)
+        # O valor do 'option' agora é o próprio nome do personagem.
+        options = [discord.SelectOption(label=name, value=name) for name in players]
+        self.player_select_menu = discord.ui.Select(placeholder="Selecione o personagem...", options=options)
 
         if self.action_type in ["causado", "recebido", "cura"]:
             self.player_select_menu.callback = self.player_select_amount_callback
@@ -247,49 +249,77 @@ class SessionTrackerView(discord.ui.View):
     async def damage_dealt_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.action_type = "causado"
         self._disable_all_buttons()
-        await self._prompt_for_player(interaction, "Dano **causado**. Agora, selecione o jogador:")
+        await self._prompt_for_player(interaction, "Dano **causado**. Agora, selecione o personagem:")
 
     @discord.ui.button(label="Dano Recebido", style=discord.ButtonStyle.red, row=0, emoji="🛡️")
     async def damage_taken_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.action_type = "recebido"
         self._disable_all_buttons()
-        await self._prompt_for_player(interaction, "Dano **recebido**. Agora, selecione o jogador:")
+        await self._prompt_for_player(interaction, "Dano **recebido**. Agora, selecione o personagem:")
 
     @discord.ui.button(label="Cura Realizada", style=discord.ButtonStyle.primary, row=0, emoji="❤️")
     async def healing_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.action_type = "cura"
         self._disable_all_buttons()
-        await self._prompt_for_player(interaction, "Cura **realizada**. Agora, selecione o jogador:")
+        await self._prompt_for_player(interaction, "Cura **realizada**. Agora, selecione o personagem:")
 
     @discord.ui.button(label="Crítico (Sucesso)", style=discord.ButtonStyle.success, row=1, emoji="✨")
     async def crit_success_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.action_type = "critico_sucesso"
         self._disable_all_buttons()
-        await self._prompt_for_player(interaction, "Um **sucesso crítico**! Selecione o jogador:")
+        await self._prompt_for_player(interaction, "Um **sucesso crítico**! Selecione o personagem:")
 
     @discord.ui.button(label="Crítico (Falha)", style=discord.ButtonStyle.danger, row=1, emoji="💥")
     async def crit_fail_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.action_type = "critico_falha"
         self._disable_all_buttons()
-        await self._prompt_for_player(interaction, "Uma **falha crítica**! Selecione o jogador:")
+        await self._prompt_for_player(interaction, "Uma **falha crítica**! Selecione o personagem:")
 
     @discord.ui.button(label="Jogador Caído", style=discord.ButtonStyle.secondary, row=2, emoji="💀")
     async def player_down_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.action_type = "jogador_caido"
         self._disable_all_buttons()
-        await self._prompt_for_player(interaction, "Um jogador **caiu em combate** (HP 0). Selecione o jogador:")
+        await self._prompt_for_player(interaction, "Um personagem **caiu em combate** (HP 0). Selecione-o:")
 
     @discord.ui.button(label="Eliminação", style=discord.ButtonStyle.secondary, row=2, emoji="🎯")
     async def elimination_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.action_type = "eliminacao"
         self._disable_all_buttons()
-        await self._prompt_for_player(interaction, "Um inimigo foi **eliminado**. Selecione o jogador responsável:")
+        await self._prompt_for_player(interaction, "Um inimigo foi **eliminado**. Selecione o personagem responsável:")
 
-    async def _finalize_log(self, interaction: discord.Interaction, player: discord.Member, action_text: str):
-        """Helper para criar a mensagem final de confirmação, tratando interações expiradas."""
+    async def _prompt_for_player(self, interaction: discord.Interaction, prompt_text: str):
+        # Busca a lista de personagens da campanha ativa.
+        players = self.data_manager.get_players_for_campaign(interaction.guild.id)
+
+        if not players:
+            error_embed = self._create_embed(
+                f"⚠️ **Nenhum Personagem Encontrado!**\n\nNão encontrei personagens registrados para a campanha ativa.\n\nUse o comando `.addplayer <nome do personagem>` para adicioná-los.",
+                color=discord.Color.red()
+            )
+            await interaction.response.edit_message(embed=error_embed, view=None)
+            self.stop()
+            return
+
+        # O valor do 'option' agora é o próprio nome do personagem.
+        options = [discord.SelectOption(label=name, value=name) for name in players]
+        self.player_select_menu = discord.ui.Select(placeholder="Selecione o personagem...", options=options)
+
+        # CORREÇÃO: A lógica agora diferencia corretamente os dois tipos de callback.
+        if self.action_type in ["causado", "recebido", "cura"]:
+            self.player_select_menu.callback = self.player_select_amount_callback
+        else:
+            self.player_select_menu.callback = self.player_select_event_callback
+
+        self.add_item(self.player_select_menu)
+        embed = self._create_embed(prompt_text)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _finalize_log(self, interaction: discord.Interaction, player_name: str, action_text: str):
+        """Helper para criar a mensagem final de confirmação, agora recebendo player_name (str)."""
+        # CORREÇÃO: A descrição agora usa 'player_name' diretamente, pois é uma string.
         final_embed = discord.Embed(
             title="✅ Evento Registrado!",
-            description=f"A seguinte ação foi registrada para **{player.display_name}** na campanha ativa:",
+            description=f"A seguinte ação foi registrada para **{player_name}** na campanha ativa:",
             color=discord.Color.green()
         )
         final_embed.add_field(name="Ação", value=action_text, inline=False)
@@ -298,24 +328,28 @@ class SessionTrackerView(discord.ui.View):
             # Tenta editar a resposta original, que é o comportamento padrão.
             await interaction.edit_original_response(embed=final_embed, view=None)
         except discord.errors.NotFound:
-            # Se o token da interação expirou (>15 min), a edição falha.
-            # Enviamos uma nova mensagem como "follow-up" para o usuário que iniciou.
+            # Se o token da interação expirou, enviamos uma nova mensagem no canal.
             log.warning(
-                f"Token de interação para o log de {interaction.user} expirou. Enviando mensagem de acompanhamento.")
+                f"Token de interação para o log de {interaction.user} expirou. Enviando uma nova mensagem no canal.")
             try:
-                await interaction.followup.send(embed=final_embed, ephemeral=True)
+                # Envia uma nova mensagem no canal, mencionando o usuário para garantir que ele veja.
+                await interaction.channel.send(
+                    content=f"✅ {interaction.user.mention}, seu registro foi salvo com sucesso, mas o menu original expirou.",
+                    embed=final_embed
+                )
             except discord.HTTPException as e:
-                log.error(f"Falha ao enviar mensagem de acompanhamento após interação expirada: {e}")
+                log.error(f"Falha ao enviar mensagem de confirmação no canal após interação expirada: {e}")
         finally:
             # Garante que a view seja parada para não aceitar mais interações.
             self.stop()
 
     async def player_select_amount_callback(self, interaction: discord.Interaction):
+        """Callback para eventos que requerem um valor numérico (dano, cura)."""
         self.player_select_menu.disabled = True
-        player_id = int(self.player_select_menu.values[0])
-        player = interaction.guild.get_member(player_id)
+        # O valor selecionado é o nome do personagem, não um ID.
+        character_name = self.player_select_menu.values[0]
 
-        prompt_message = f"Qual foi o valor de **{self.action_type}** para **{player.display_name}**?\n\nDigite apenas o número no chat."
+        prompt_message = f"Qual foi o valor de **{self.action_type.replace('_', ' ')}** para **{character_name}**?\n\nDigite apenas o número no chat."
         embed = self._create_embed(prompt_message)
         await interaction.response.edit_message(embed=embed, view=self)
 
@@ -332,7 +366,8 @@ class SessionTrackerView(discord.ui.View):
 
         amount = int(message.content)
         try:
-            self.data_manager.log_event(interaction.guild.id, player, self.action_type, amount)
+            # Passa o nome do personagem (string) diretamente para o data_manager.
+            self.data_manager.log_event(interaction.guild.id, character_name, self.action_type, amount)
         except ValueError as e:
             await interaction.edit_original_response(content=f"❌ Erro: {e}", embed=None, view=None)
             return
@@ -344,7 +379,8 @@ class SessionTrackerView(discord.ui.View):
         }
         action_text = action_text_map.get(self.action_type, f"{self.action_type.replace('_', ' ').title()}: {amount}")
 
-        await self._finalize_log(interaction, player, action_text)
+        # CORREÇÃO: Passa o nome do personagem (string) para a função de finalização.
+        await self._finalize_log(interaction, character_name, action_text)
 
         try:
             await message.delete()
@@ -352,12 +388,14 @@ class SessionTrackerView(discord.ui.View):
             pass
 
     async def player_select_event_callback(self, interaction: discord.Interaction):
+        """Callback para eventos que não requerem um valor (críticos, quedas, etc.)."""
         self.player_select_menu.disabled = True
-        player_id = int(self.player_select_menu.values[0])
-        player = interaction.guild.get_member(player_id)
+        # O valor selecionado é o nome do personagem, não um ID.
+        character_name = self.player_select_menu.values[0]
 
         try:
-            self.data_manager.log_event(interaction.guild.id, player, self.action_type, 1)
+            # Passa o nome do personagem (string) diretamente para o data_manager com valor 1.
+            self.data_manager.log_event(interaction.guild.id, character_name, self.action_type, 1)
         except ValueError as e:
             await interaction.edit_original_response(content=f"❌ Erro: {e}", embed=None, view=None)
             return
@@ -365,9 +403,10 @@ class SessionTrackerView(discord.ui.View):
         action_text_map = {
             "critico_sucesso": "✨ Acerto Crítico (20)",
             "critico_falha": "💥 Falha Crítica (1)",
-            "jogador_caido": "💀 Jogador Caído",
+            "jogador_caido": "💀 Personagem Caído",
             "eliminacao": "🎯 Eliminação"
         }
         action_text = action_text_map.get(self.action_type, self.action_type.replace('_', ' ').title())
 
-        await self._finalize_log(interaction, player, action_text)
+        # CORREÇÃO: Passa o nome do personagem (string) para a função de finalização.
+        await self._finalize_log(interaction, character_name, action_text)
